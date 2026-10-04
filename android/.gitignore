@@ -1,0 +1,7 @@
+.gradle/
+build/
+app/build/
+app/.cxx/
+local.properties
+app/src/main/cpp/llama.cpp/
+app/src/main/assets/tessdata/

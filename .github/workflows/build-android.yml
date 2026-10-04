@@ -1,0 +1,80 @@
+# Сборка APK для Android на бесплатном Linux-сервере GitHub.
+# Результат: вкладка Releases → android-<номер> → IndexAI.apk (+ build-log.txt).
+
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths: ["android/**", ".github/workflows/build-android.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Get llama.cpp (b11380)
+        run: git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp app/src/main/cpp/llama.cpp
+
+      - name: Get Tesseract data (rus + eng)
+        run: |
+          mkdir -p app/src/main/assets/tessdata
+          curl -sSL -o app/src/main/assets/tessdata/rus.traineddata https://github.com/tesseract-ocr/tessdata_fast/raw/main/rus.traineddata
+          curl -sSL -o app/src/main/assets/tessdata/eng.traineddata https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata
+          ls -la app/src/main/assets/tessdata
+
+      - name: Build APK
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee build-log-full.txt
+
+      - name: Prepare log
+        if: always()
+        run: |
+          {
+            echo "=== Result: ${{ steps.build.outcome }} ==="
+            echo; echo "=== Errors ==="
+            grep -E "^e: |error:|FAILURE|What went wrong|BUILD FAILED|BUILD SUCCESSFUL" -A3 build-log-full.txt | head -300 || true
+            echo; echo "=== Tail ==="
+            tail -150 build-log-full.txt
+          } > build-log.txt 2>&1
+
+      - name: Publish release (success)
+        if: steps.build.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk IndexAI.apk
+          ls -lh IndexAI.apk
+          gh release create "android-${{ github.run_number }}" IndexAI.apk build-log.txt \
+            --title "Android ${{ github.run_number }} — готово" \
+            --notes "Index AI для Android. Скачайте IndexAI.apk на телефон и установите." \
+            --latest=false
+
+      - name: Publish log (failure)
+        if: steps.build.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-${{ github.run_number }}-failed" build-log.txt \
+            --title "Android ${{ github.run_number }} — ошибка" --notes "Лог сборки во вложении." --prerelease
+          exit 1
