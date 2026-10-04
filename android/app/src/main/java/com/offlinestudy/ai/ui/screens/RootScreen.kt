@@ -42,6 +42,7 @@ fun RootScreen() {
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
             bottomBar = {
                 NavigationBar(containerColor = if (dark) Color(0xEE111124) else Color(0xEEFFFFFF)) {
                     val items = listOf(

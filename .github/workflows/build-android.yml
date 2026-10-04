@@ -76,6 +76,12 @@ jobs:
             --title "Android ${{ github.run_number }} — готово" \
             --notes "Index AI для Android. Скачайте IndexAI.apk на телефон и установите." \
             --latest=false
+          # Постоянная ссылка на последнюю версию для друзей
+          gh release delete android-latest -y --cleanup-tag || true
+          gh release create android-latest IndexAI.apk \
+            --title "Index AI для Android — последняя версия" \
+            --notes "Всегда последняя сборка. Скачайте IndexAI.apk на телефон и установите." \
+            --latest=false
 
       - name: Publish log (failure)
         if: steps.build.outcome != 'success'
