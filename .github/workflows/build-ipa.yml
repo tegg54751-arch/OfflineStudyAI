@@ -1,0 +1,94 @@
+# Сборка неподписанного .ipa на macOS-раннере GitHub (бесплатно для публичных репозиториев).
+# Запускается автоматически при каждой загрузке файлов в ветку main
+# (или вручную: Actions → Build unsigned IPA → Run workflow).
+#
+# Результат публикуется во вкладке Releases (скачивается без входа в аккаунт):
+#   OfflineStudyAI-unsigned.ipa  — поставить на iPhone через Sideloadly
+#   build-log.txt                — полный лог сборки (и при успехе, и при ошибке)
+
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Build (no code signing)
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project OfflineStudyAI.xcodeproj \
+            -scheme OfflineStudyAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-log-full.txt
+        continue-on-error: true
+
+      - name: Prepare log
+        if: always()
+        run: |
+          {
+            echo "=== Xcode ==="; xcodebuild -version
+            echo; echo "=== Result: ${{ steps.build.outcome }} ==="
+            echo; echo "=== Errors ==="
+            grep -E "error:|fatal error|BUILD FAILED|\*\* BUILD" build-log-full.txt | sort -u | head -200 || true
+            echo; echo "=== Warnings (first 100) ==="
+            grep -E "warning:" build-log-full.txt | sort -u | head -100 || true
+            echo; echo "=== Tail of full log ==="
+            tail -300 build-log-full.txt
+          } > build-log.txt 2>&1
+
+      - name: Package IPA
+        if: steps.build.outcome == 'success'
+        run: |
+          APP="build/Build/Products/Release-iphoneos/OfflineStudyAI.app"
+          test -d "$APP"
+          mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../OfflineStudyAI-unsigned.ipa Payload)
+          ls -lh OfflineStudyAI-unsigned.ipa
+
+      - name: Publish release (success)
+        if: steps.build.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" OfflineStudyAI-unsigned.ipa build-log.txt \
+            --title "Сборка ${{ github.run_number }} — готово" \
+            --notes "Неподписанный .ipa. Установите на iPhone через Sideloadly с вашим Apple ID." \
+            --latest
+
+      - name: Publish log (failure)
+        if: steps.build.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}-failed"
+          gh release create "$TAG" build-log.txt \
+            --title "Сборка ${{ github.run_number }} — ошибка" \
+            --notes "Сборка не удалась, лог во вложении." \
+            --prerelease
+          exit 1
