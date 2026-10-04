@@ -39,12 +39,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.offlinestudy.ai.data.Subject
 import com.offlinestudy.ai.ui.theme.LocalIsDark
+import com.offlinestudy.ai.ui.theme.LocalStyle
 import com.offlinestudy.ai.ui.theme.Palette
 import kotlin.math.sin
 
@@ -54,6 +56,11 @@ fun AppBackground(content: @Composable BoxScope.() -> Unit) {
     val dark = LocalIsDark.current
     val transition = rememberInfiniteTransition(label = "bg")
     val t by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "t")
+    if (LocalStyle.current.minimal) {
+        // «Минимал»: чистый чёрный фон без цветных пятен.
+        Box(Modifier.fillMaxSize().background(Color.Black)) { content() }
+        return
+    }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
             Modifier.offset(x = (60 + 60 * t).dp, y = (-40 + 50 * t).dp).size(320.dp).blur(90.dp)
@@ -77,12 +84,18 @@ fun GlassCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dark = LocalIsDark.current
+    val minimal = LocalStyle.current.minimal
     val shape = RoundedCornerShape(corner)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     var m = modifier.fillMaxWidth().scale(if (pressed) 0.97f else 1f).clip(shape)
-        .background(if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.72f))
-        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) 0.25f else 0.9f), Color.White.copy(alpha = 0.04f))), shape)
+        .background(if (minimal) Color(0xFF0E0E0E) else if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.72f))
+        .border(
+            1.dp,
+            if (minimal) SolidColor(Color.White.copy(alpha = 0.12f))
+            else Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) 0.25f else 0.9f), Color.White.copy(alpha = 0.04f))),
+            shape
+        )
     if (onClick != null) m = m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
     Column(m.padding(padding), content = content)
 }
@@ -93,14 +106,14 @@ fun PrimaryButton(text: String, modifier: Modifier = Modifier, enabled: Boolean 
     val pressed by interaction.collectIsPressedAsState()
     Row(
         modifier.fillMaxWidth().scale(if (pressed) 0.97f else 1f).clip(RoundedCornerShape(20.dp))
-            .background(if (enabled) Palette.brand else Brush.linearGradient(listOf(Color.Gray, Color.Gray)))
+            .background(if (enabled) LocalStyle.current.brand else Brush.linearGradient(listOf(Color.Gray, Color.Gray)))
             .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
             .padding(vertical = 16.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (leading != null) { Text(leading); Spacer(Modifier.width(8.dp)) }
-        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Text(text, color = LocalStyle.current.onBrand, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }
 }
 
@@ -111,8 +124,8 @@ fun GlassButton(text: String, modifier: Modifier = Modifier, leading: String? = 
     val pressed by interaction.collectIsPressedAsState()
     Row(
         modifier.scale(if (pressed) 0.97f else 1f).clip(RoundedCornerShape(18.dp))
-            .background(if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f))
-            .border(1.dp, Color.White.copy(alpha = if (dark) 0.18f else 0.9f), RoundedCornerShape(18.dp))
+            .background(if (LocalStyle.current.minimal) Color(0xFF151515) else if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.85f))
+            .border(1.dp, Color.White.copy(alpha = if (LocalStyle.current.minimal) 0.14f else if (dark) 0.18f else 0.9f), RoundedCornerShape(18.dp))
             .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
             .padding(vertical = 13.dp, horizontal = 10.dp),
         horizontalArrangement = Arrangement.Center,
@@ -153,7 +166,7 @@ fun TypingIndicator() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { i ->
             val v = ((sin(phase - i * 0.9) + 1) / 2).toFloat()
-            Box(Modifier.padding(end = 6.dp).size(8.dp).scale(0.7f + 0.4f * v).clip(CircleShape).background(Palette.brand))
+            Box(Modifier.padding(end = 6.dp).size(8.dp).scale(0.7f + 0.4f * v).clip(CircleShape).background(LocalStyle.current.brand))
         }
         Text("Думаю…", fontSize = 13.sp, color = Color.Gray, modifier = Modifier.padding(start = 2.dp))
     }

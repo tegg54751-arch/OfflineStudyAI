@@ -44,7 +44,7 @@ fun RootScreen() {
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
             bottomBar = {
-                NavigationBar(containerColor = if (dark) Color(0xEE111124) else Color(0xEEFFFFFF)) {
+                NavigationBar(containerColor = if (com.offlinestudy.ai.ui.theme.LocalStyle.current.minimal) Color.Black else if (dark) Color(0xEE111124) else Color(0xEEFFFFFF)) {
                     val items = listOf(
                         Triple(AppTab.HOME, "Главная", Icons.Filled.Home),
                         Triple(AppTab.CHAT, "Спросить", Icons.Filled.Create),

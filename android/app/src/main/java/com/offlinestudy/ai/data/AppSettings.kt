@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class AppTheme(val title: String) { SYSTEM("Как в системе"), LIGHT("Светлая"), DARK("Тёмная") }
+enum class AppTheme(val title: String) { SYSTEM("Системная"), LIGHT("Светлая"), DARK("Тёмная"), MINIMAL("Минимал") }
 
 enum class TextSize(val title: String, val scale: Float) {
     SMALL("Мелкий", 0.9f), NORMAL("Обычный", 1.0f), LARGE("Крупный", 1.15f), EXTRA_LARGE("Очень крупный", 1.3f)

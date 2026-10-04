@@ -46,6 +46,7 @@ import com.offlinestudy.ai.ui.components.PrimaryButton
 import com.offlinestudy.ai.ui.components.SectionTitle
 import com.offlinestudy.ai.ui.components.StatusDot
 import com.offlinestudy.ai.ui.theme.LocalIsDark
+import com.offlinestudy.ai.ui.theme.LocalStyle
 import com.offlinestudy.ai.ui.theme.Palette
 import com.offlinestudy.ai.util.Format
 
@@ -72,7 +73,7 @@ fun HomeScreen() {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     "Offline Study AI",
-                    style = TextStyle(brush = Palette.brand, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(brush = LocalStyle.current.brand, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 )
                 Row(
                     Modifier.clip(CircleShape).background(if (LocalIsDark.current) Color.White.copy(0.08f) else Color.White.copy(0.8f))

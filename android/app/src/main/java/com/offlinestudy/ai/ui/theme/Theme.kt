@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.offlinestudy.ai.data.AppTheme
@@ -25,18 +26,40 @@ object Palette {
     val brand = Brush.linearGradient(listOf(Indigo, Violet, Teal))
 }
 
-/** Признак тёмной темы для «стеклянных» элементов. */
+/** Оформление акцентных элементов: градиент в обычных темах, белый в «Минимал». */
+data class AppStyle(
+    val brand: Brush,
+    val onBrand: Color,
+    val accent: Color,
+    val minimal: Boolean
+)
+
 val LocalIsDark = staticCompositionLocalOf { false }
+val LocalStyle = staticCompositionLocalOf { AppStyle(Palette.brand, Color.White, Palette.Violet, false) }
 
 @Composable
 fun OfflineStudyTheme(theme: AppTheme, textScale: Float, content: @Composable () -> Unit) {
+    val minimal = theme == AppTheme.MINIMAL
     val dark = when (theme) {
         AppTheme.SYSTEM -> isSystemInDarkTheme()
         AppTheme.LIGHT -> false
-        AppTheme.DARK -> true
+        AppTheme.DARK, AppTheme.MINIMAL -> true
     }
-    val colors = if (dark) {
-        darkColorScheme(
+    val colors = when {
+        minimal -> darkColorScheme(
+            primary = Color.White,
+            onPrimary = Color.Black,
+            secondary = Color(0xFFB0B0B0),
+            background = Color.Black,
+            surface = Color(0xFF0E0E0E),
+            surfaceContainerLow = Color(0xFF0E0E0E),
+            surfaceContainer = Color(0xFF121212),
+            surfaceContainerHigh = Color(0xFF161616),
+            onBackground = Color.White,
+            onSurface = Color.White,
+            onSurfaceVariant = Color(0xFFB0B0B0)
+        )
+        dark -> darkColorScheme(
             primary = Color(0xFF8C8CFF),
             secondary = Palette.Teal,
             background = Color(0xFF0A0A17),
@@ -44,8 +67,7 @@ fun OfflineStudyTheme(theme: AppTheme, textScale: Float, content: @Composable ()
             onBackground = Color.White,
             onSurface = Color.White
         )
-    } else {
-        lightColorScheme(
+        else -> lightColorScheme(
             primary = Palette.Indigo,
             secondary = Palette.Teal,
             background = Color(0xFFF2F2FC),
@@ -54,14 +76,17 @@ fun OfflineStudyTheme(theme: AppTheme, textScale: Float, content: @Composable ()
             onSurface = Color(0xFF111122)
         )
     }
+    val style = if (minimal) AppStyle(SolidColor(Color.White), Color.Black, Color.White, true)
+                else AppStyle(Palette.brand, Color.White, Palette.Violet, false)
     val density = LocalDensity.current
-    CompositionLocalProvider(
-        LocalIsDark provides dark,
-        LocalDensity provides Density(density.density, density.fontScale * textScale)
-    ) {
-        MaterialTheme(colorScheme = colors) {
-            // Цвет текста по умолчанию: белый в тёмной теме, тёмный в светлой.
-            CompositionLocalProvider(LocalContentColor provides colors.onBackground, content = content)
-        }
+    MaterialTheme(colorScheme = colors) {
+        CompositionLocalProvider(
+            LocalIsDark provides dark,
+            LocalStyle provides style,
+            // Цвет текста по умолчанию — из темы (раньше был чёрным и сливался с тёмным фоном).
+            LocalContentColor provides colors.onBackground,
+            LocalDensity provides Density(density.density, density.fontScale * textScale),
+            content = content
+        )
     }
 }

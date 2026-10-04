@@ -53,6 +53,7 @@ import com.offlinestudy.ai.ui.components.MarkdownParser
 import com.offlinestudy.ai.ui.components.MarkdownText
 import com.offlinestudy.ai.ui.components.SubjectBadge
 import com.offlinestudy.ai.ui.theme.LocalIsDark
+import com.offlinestudy.ai.ui.theme.LocalStyle
 import com.offlinestudy.ai.ui.theme.Palette
 import com.offlinestudy.ai.util.Format
 
@@ -184,9 +185,9 @@ fun HistoryScreen() {
 private fun Chip(title: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.clip(CircleShape)
-            .background(if (selected) Palette.brand else androidx.compose.ui.graphics.SolidColor(Color.Gray.copy(alpha = 0.15f)))
+            .background(if (selected) LocalStyle.current.brand else androidx.compose.ui.graphics.SolidColor(Color.Gray.copy(alpha = 0.15f)))
             .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp)
-    ) { Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (selected) Color.White else Color.Unspecified) }
+    ) { Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (selected) LocalStyle.current.onBrand else Color.Unspecified) }
 }
 
 @Composable

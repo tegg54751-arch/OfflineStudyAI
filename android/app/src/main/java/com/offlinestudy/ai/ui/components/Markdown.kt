@@ -73,7 +73,7 @@ private fun BlockView(block: MdBlock, color: Color) {
         is MdBlock.Bullets -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             block.items.forEach { item ->
                 Row {
-                    Box(Modifier.padding(top = 8.dp, end = 8.dp).size(6.dp).clip(CircleShape).background(Palette.Violet))
+                    Box(Modifier.padding(top = 8.dp, end = 8.dp).size(6.dp).clip(CircleShape).background(com.offlinestudy.ai.ui.theme.LocalStyle.current.accent))
                     Text(MarkdownParser.inline(item), color = color, fontSize = body, lineHeight = 22.sp)
                 }
             }
@@ -81,7 +81,7 @@ private fun BlockView(block: MdBlock, color: Color) {
         is MdBlock.Numbered -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             block.items.forEach { (n, item) ->
                 Row {
-                    Text("$n.", color = Palette.Violet, fontWeight = FontWeight.Bold, fontSize = body, modifier = Modifier.width(26.dp))
+                    Text("$n.", color = com.offlinestudy.ai.ui.theme.LocalStyle.current.accent, fontWeight = FontWeight.Bold, fontSize = body, modifier = Modifier.width(26.dp))
                     Text(MarkdownParser.inline(item), color = color, fontSize = body, lineHeight = 22.sp)
                 }
             }

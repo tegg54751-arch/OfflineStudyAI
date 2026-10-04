@@ -80,6 +80,7 @@ import com.offlinestudy.ai.ui.components.PrimaryButton
 import com.offlinestudy.ai.ui.components.SubjectBadge
 import com.offlinestudy.ai.ui.components.TypingIndicator
 import com.offlinestudy.ai.ui.theme.LocalIsDark
+import com.offlinestudy.ai.ui.theme.LocalStyle
 import com.offlinestudy.ai.ui.theme.Palette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -330,13 +331,13 @@ private fun InputBar(
                 .background(
                     when {
                         isGenerating -> androidx.compose.ui.graphics.SolidColor(Palette.Red)
-                        canSend -> Palette.brand
+                        canSend -> LocalStyle.current.brand
                         else -> androidx.compose.ui.graphics.SolidColor(Color.Gray.copy(alpha = 0.4f))
                     }
                 )
                 .clickable(enabled = isGenerating || canSend) { if (isGenerating) onStop() else onSend() },
             contentAlignment = Alignment.Center
-        ) { Text(if (isGenerating) "■" else "↑", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(if (isGenerating) "■" else "↑", color = if (isGenerating) Color.White else LocalStyle.current.onBrand, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
@@ -353,7 +354,7 @@ private fun MessageBubble(
     if (message.role == MessageRole.USER) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Column(
-                Modifier.padding(start = 48.dp).clip(RoundedCornerShape(22.dp)).background(Palette.brand)
+                Modifier.padding(start = 48.dp).clip(RoundedCornerShape(22.dp)).background(LocalStyle.current.brand)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.End
             ) {
@@ -364,10 +365,10 @@ private fun MessageBubble(
                     else -> null
                 }
                 if (label != null) {
-                    Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(label, color = LocalStyle.current.onBrand, fontWeight = FontWeight.SemiBold)
                 } else {
-                    if (message.kind == MessageKind.SOLVE) Text("Задание", color = Color.White.copy(0.8f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text(message.text, color = Color.White, fontSize = 16.sp)
+                    if (message.kind == MessageKind.SOLVE) Text("Задание", color = LocalStyle.current.onBrand.copy(0.8f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(message.text, color = LocalStyle.current.onBrand, fontSize = 16.sp)
                 }
             }
         }
@@ -380,8 +381,8 @@ private fun MessageBubble(
 
     GlassCard(Modifier.padding(end = 12.dp), corner = 24.dp, padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(24.dp).clip(CircleShape).background(Palette.brand), contentAlignment = Alignment.Center) {
-                Text("✦", color = Color.White, fontSize = 12.sp)
+            Box(Modifier.size(24.dp).clip(CircleShape).background(LocalStyle.current.brand), contentAlignment = Alignment.Center) {
+                Text("✦", color = LocalStyle.current.onBrand, fontSize = 12.sp)
             }
             Spacer(Modifier.width(8.dp))
             Text("Index AI", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
@@ -430,8 +431,8 @@ private fun EmptyState(mode: ChatMode, onSuggestion: (String) -> Unit) {
     )
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Spacer(Modifier.height(10.dp))
-        Box(Modifier.size(84.dp).clip(CircleShape).background(Palette.brand), contentAlignment = Alignment.Center) {
-            Text(if (mode == ChatMode.SOLVE) "✓" else "✦", color = Color.White, fontSize = 36.sp)
+        Box(Modifier.size(84.dp).clip(CircleShape).background(LocalStyle.current.brand), contentAlignment = Alignment.Center) {
+            Text(if (mode == ChatMode.SOLVE) "✓" else "✦", color = LocalStyle.current.onBrand, fontSize = 36.sp)
         }
         Text(if (mode == ChatMode.SOLVE) "Решение заданий" else "Один чат — все предметы", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(

@@ -62,6 +62,7 @@ fun SettingsScreen() {
             Section("Оформление") {
                 Label("Тема")
                 Segmented(AppTheme.entries, s.theme, { it.title }) { s.updateTheme(it) }
+                if (s.theme == AppTheme.MINIMAL) Hint("Чёрный фон, белый текст, без цветов и эффектов. Меньше расход батареи на AMOLED-экранах.")
                 Label("Размер текста")
                 Segmented(TextSize.entries, s.textSize, { it.title }) { s.updateTextSize(it) }
             }
