@@ -141,6 +141,19 @@ fun ModelScreen(onBack: () -> Unit) {
             }
             models.lastError?.let { Text("⚠️ $it", color = Palette.Orange, fontSize = 13.sp) }
 
+            // Журнал движка: точная причина ошибок — можно скопировать и отправить разработчику.
+            var showLog by remember { mutableStateOf(false) }
+            GlassButton(if (showLog) "Скрыть журнал движка" else "Журнал движка (для диагностики)", Modifier.fillMaxWidth(), leading = "🧾") { showLog = !showLog }
+            if (showLog) {
+                val log = remember(tick) { com.offlinestudy.ai.ai.LlamaBridge.nativeGetLog().ifBlank { "Журнал пуст." } }
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                GlassCard {
+                    Text("Нажмите, чтобы скопировать", fontSize = 12.sp, color = Palette.Indigo,
+                        modifier = Modifier.clickable { clipboard.setText(androidx.compose.ui.text.AnnotatedString(log)) }.padding(bottom = 6.dp))
+                    SelectionContainer { Text(log.takeLast(6000), fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
+                }
+            }
+
             // Память
             androidx.compose.runtime.key(tick) { GlassCard {
                 Text("Память устройства", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)

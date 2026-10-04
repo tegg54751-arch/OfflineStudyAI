@@ -12,6 +12,7 @@ object LlamaBridge {
 
     external fun nativeInit(nativeLibDir: String)
     external fun nativeLastError(): String
+    external fun nativeGetLog(): String
     external fun nativeSetThrottle(micros: Int)
     external fun nativeLoad(path: String, contextSize: Int, threads: Int): Long
     external fun nativeInfo(handle: Long): String

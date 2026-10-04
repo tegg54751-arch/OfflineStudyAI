@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <deque>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -39,10 +40,34 @@ std::string g_last_error;
 std::atomic<int> g_throttle_us{0};
 std::once_flag g_backend_once;
 
+// Последние строки журнала движка — показываются в приложении («Журнал движка»).
+std::mutex g_log_mutex;
+std::deque<std::string> g_log;
+std::string g_log_partial;
+
+void add_log(const std::string &line) {
+    std::lock_guard<std::mutex> lock(g_log_mutex);
+    g_log.push_back(line);
+    while (g_log.size() > 400) g_log.pop_front();
+}
+
 void log_callback(ggml_log_level level, const char *text, void *) {
     int prio = level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR
              : level == GGML_LOG_LEVEL_WARN ? ANDROID_LOG_WARN : ANDROID_LOG_DEBUG;
     __android_log_print(prio, "llama", "%s", text);
+    if (level == GGML_LOG_LEVEL_DEBUG) return;
+    std::lock_guard<std::mutex> lock(g_log_mutex);
+    g_log_partial += text ? text : "";
+    size_t pos;
+    while ((pos = g_log_partial.find('\n')) != std::string::npos) {
+        std::string line = g_log_partial.substr(0, pos);
+        g_log_partial.erase(0, pos + 1);
+        if (!line.empty()) {
+            const char *tag = level == GGML_LOG_LEVEL_ERROR ? "E " : level == GGML_LOG_LEVEL_WARN ? "W " : "";
+            g_log.push_back(tag + line);
+            while (g_log.size() > 400) g_log.pop_front();
+        }
+    }
 }
 
 std::string jstring_to_std(JNIEnv *env, jstring value) {
@@ -242,14 +267,31 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeInit(JNIEnv *env, jobject, jstring
     std::call_once(g_backend_once, [&]() {
         llama_log_set(log_callback, nullptr);
         LOGI("Loading ggml backends from %s", dir.c_str());
+        add_log("Init: backends dir = " + dir);
         ggml_backend_load_all_from_path(dir.c_str());
         llama_backend_init();
+        add_log(std::string("Init: system info = ") + llama_print_system_info());
+        for (size_t i = 0; i < ggml_backend_reg_count(); ++i) {
+            add_log(std::string("Init: backend ") + ggml_backend_reg_name(ggml_backend_reg_get(i)));
+        }
     });
 }
 
 JNIEXPORT void JNICALL
 Java_com_offlinestudy_ai_ai_LlamaBridge_nativeSetThrottle(JNIEnv *, jobject, jint micros) {
     g_throttle_us = std::max(0, static_cast<int>(micros));
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGetLog(JNIEnv *env, jobject) {
+    std::string all;
+    {
+        std::lock_guard<std::mutex> lock(g_log_mutex);
+        for (const auto &line : g_log) { all += line; all += '\n'; }
+    }
+    // NewStringUTF требует корректный (modified) UTF-8: заменяем нулевые байты на всякий случай.
+    for (auto &ch : all) if (ch == '\0') ch = ' ';
+    return env->NewStringUTF(all.c_str());
 }
 
 JNIEXPORT jstring JNICALL
@@ -265,9 +307,16 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0; // на Android считаем на CPU — стабильно на любых телефонах
 
+    add_log("Load: " + path + " ctx=" + std::to_string(n_ctx_requested) + " threads=" + std::to_string(n_threads));
+    if (ggml_backend_reg_count() == 0) {
+        g_last_error = "no_backends";
+        add_log("E Load: no ggml backends were loaded");
+        return 0;
+    }
     llama_model *model = llama_model_load_from_file(path.c_str(), mparams);
     if (!model) {
         g_last_error = "model_load_failed";
+        add_log("E Load: llama_model_load_from_file returned null");
         return 0;
     }
 
@@ -288,8 +337,10 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     if (!ctx) {
         llama_model_free(model);
         g_last_error = "context_init_failed";
+        add_log("E Load: llama_init_from_model returned null");
         return 0;
     }
+    add_log("Load: OK, n_ctx=" + std::to_string(llama_n_ctx(ctx)));
 
     auto *engine = new Engine();
     engine->model = model;

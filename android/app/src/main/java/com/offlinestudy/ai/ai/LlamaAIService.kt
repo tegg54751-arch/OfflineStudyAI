@@ -42,6 +42,7 @@ class LlamaAIService(nativeLibDir: String) : AIService {
         if (h == 0L) {
             throw when (LlamaBridge.nativeLastError()) {
                 "context_init_failed" -> AIException.contextFailed()
+                "no_backends" -> AIException("Не удалось запустить вычислительный модуль на этом процессоре. Откройте «Журнал движка» в разделе «AI-модель» и пришлите его разработчику.")
                 else -> AIException.loadFailed(model.name)
             }
         }

@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as OfflineStudyApp
+        if (intent?.getBooleanExtra("selftest", false) == true) SelfTest.run(app)
         setContent {
             OfflineStudyTheme(app.settings.theme, app.settings.textSize.scale) {
                 SystemBarsColors()

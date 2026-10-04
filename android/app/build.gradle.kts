@@ -29,7 +29,8 @@ android {
         versionName = "1.3"
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            // Для автотеста на эмуляторе собираем x86_64: ./gradlew assembleRelease -Pabis=x86_64
+            abiFilters += ((project.findProperty("abis") as String?) ?: "arm64-v8a").split(",")
         }
         externalNativeBuild {
             cmake {
