@@ -19,6 +19,11 @@ actor LlamaEngine {
     /// общего префикса диалога — ускоряет продолжение чата).
     private var cachedTokens: [llama_token] = []
 
+    /// Токены с иероглифами/каной/хангылем, которые запрещены при генерации.
+    /// Маленькие многоязычные модели (особенно Qwen) иногда «съезжают» на китайский —
+    /// запрет на уровне сэмплера делает это невозможным.
+    private var bannedTokens: [llama_logit_bias] = []
+
     var isLoaded: Bool { model != nil && context != nil }
 
     // MARK: - Загрузка / выгрузка
@@ -63,6 +68,7 @@ actor LlamaEngine {
         context = ctx
         vocab = llama_model_get_vocab(loadedModel)
         cachedTokens = []
+        bannedTokens = buildBannedTokens()
 
         var descBuffer = [CChar](repeating: 0, count: 256)
         _ = llama_model_desc(loadedModel, &descBuffer, descBuffer.count)
@@ -90,6 +96,7 @@ actor LlamaEngine {
         model = nil
         vocab = nil
         cachedTokens = []
+        bannedTokens = []
     }
 
     // MARK: - Генерация
@@ -154,11 +161,16 @@ actor LlamaEngine {
         }
         defer { llama_sampler_free(sampler) }
 
+        let nVocab = llama_vocab_n_tokens(vocab)
+        if !bannedTokens.isEmpty {
+            bannedTokens.withUnsafeBufferPointer { buffer in
+                llama_sampler_chain_add(sampler, llama_sampler_init_logit_bias(nVocab, Int32(buffer.count), buffer.baseAddress))
+            }
+        }
+        llama_sampler_chain_add(sampler, llama_sampler_init_penalties(nVocab, 64, params.repeatPenalty, 0, 0))
         if params.temperature <= 0.01 {
-            llama_sampler_chain_add(sampler, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, params.repeatPenalty, 0, 0))
             llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
         } else {
-            llama_sampler_chain_add(sampler, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, params.repeatPenalty, 0, 0))
             llama_sampler_chain_add(sampler, llama_sampler_init_top_k(params.topK))
             llama_sampler_chain_add(sampler, llama_sampler_init_top_p(params.topP, 1))
             llama_sampler_chain_add(sampler, llama_sampler_init_min_p(params.minP, 1))
@@ -216,6 +228,27 @@ actor LlamaEngine {
     func resetCache() {
         if let context { llama_memory_clear(llama_get_memory(context), true) }
         cachedTokens = []
+    }
+
+    // MARK: - Запрет иероглифов
+
+    /// Находит в словаре все токены, содержащие начало символа из диапазона U+3000…U+DFFF
+    /// (китайские/японские иероглифы, кана, хангыль, CJK-пунктуация).
+    /// В UTF-8 такие символы начинаются с байтов 0xE3…0xED, а кириллица — с 0xD0/0xD1,
+    /// поэтому русский текст, латиница и математические символы (0xE2: →, √, —) не затрагиваются.
+    private func buildBannedTokens() -> [llama_logit_bias] {
+        guard let vocab else { return [] }
+        let count = llama_vocab_n_tokens(vocab)
+        var result: [llama_logit_bias] = []
+        result.reserveCapacity(20_000)
+        for token in 0..<count {
+            if llama_vocab_is_control(vocab, token) || llama_vocab_is_eog(vocab, token) { continue }
+            let bytes = piece(for: token)
+            if bytes.contains(where: { $0 >= 0xE3 && $0 <= 0xED }) {
+                result.append(llama_logit_bias(token: token, bias: -Float.infinity))
+            }
+        }
+        return result
     }
 
     // MARK: - Промпт

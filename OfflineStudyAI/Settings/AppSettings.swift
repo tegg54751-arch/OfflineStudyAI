@@ -44,10 +44,11 @@ enum TextSizeOption: String, CaseIterable, Identifiable {
 }
 
 enum AnswerStyle: String, CaseIterable, Identifiable {
-    case short, detailed
+    case answerOnly, short, detailed
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .answerOnly: "Только ответ"
         case .short: "Кратко"
         case .detailed: "Подробно"
         }
@@ -103,7 +104,7 @@ final class AppSettings {
         contextSize = ctx > 0 ? ctx : 2048
         let maxTok = defaults.integer(forKey: Keys.maxAnswerTokens)
         maxAnswerTokens = maxTok > 0 ? maxTok : 600
-        temperature = defaults.object(forKey: Keys.temperature) as? Double ?? 0.3
+        temperature = defaults.object(forKey: Keys.temperature) as? Double ?? 0.2
         unloadInBackground = defaults.object(forKey: Keys.unloadInBackground) as? Bool ?? true
         preloadOnLaunch = defaults.object(forKey: Keys.preloadOnLaunch) as? Bool ?? true
     }

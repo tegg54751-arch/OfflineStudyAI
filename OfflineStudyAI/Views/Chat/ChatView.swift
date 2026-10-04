@@ -152,7 +152,8 @@ struct ChatView: View {
                             showsFollowUps: message.id == session.lastAssistantMessageID && !session.isGenerating,
                             onFavorite: { session.toggleFavorite(message.id) },
                             onSimpler: { session.explainSimpler() },
-                            onExample: { session.giveExample() }
+                            onExample: { session.giveExample() },
+                            onAnswerOnly: { session.answerOnly() }
                         )
                         .id(message.id)
                         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))

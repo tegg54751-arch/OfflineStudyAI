@@ -34,6 +34,7 @@ enum MessageKind: String, Codable {
     case solve
     case simpler
     case example
+    case answerOnly
     case error
 }
 

@@ -75,6 +75,10 @@ final class ChatSession {
         submit("Дай конкретный пример по этой теме — из жизни или задачу с решением.", kind: .example)
     }
 
+    func answerOnly() {
+        submit("Напиши только ответ, без условия и объяснений.", kind: .answerOnly)
+    }
+
     func stop() {
         generationTask?.cancel()
     }

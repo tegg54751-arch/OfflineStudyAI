@@ -9,6 +9,7 @@ struct MessageBubble: View {
     var onFavorite: () -> Void = {}
     var onSimpler: () -> Void = {}
     var onExample: () -> Void = {}
+    var onAnswerOnly: () -> Void = {}
 
     @State private var copied = false
 
@@ -25,9 +26,9 @@ struct MessageBubble: View {
         HStack {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 4) {
-                if message.kind == .simpler || message.kind == .example {
-                    Label(message.kind == .simpler ? "Объясни проще" : "Дай пример",
-                          systemImage: message.kind == .simpler ? "wand.and.stars" : "lightbulb")
+                if message.kind == .simpler || message.kind == .example || message.kind == .answerOnly {
+                    Label(message.kind == .simpler ? "Объясни проще" : message.kind == .example ? "Дай пример" : "Только ответ",
+                          systemImage: message.kind == .simpler ? "wand.and.stars" : message.kind == .example ? "lightbulb" : "checkmark.circle")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                 } else {
@@ -121,16 +122,23 @@ struct MessageBubble: View {
     }
 
     private var followUps: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Button(action: onSimpler) {
-                Label("Объясни проще", systemImage: "wand.and.stars")
+                Label("Проще", systemImage: "wand.and.stars")
             }
             .buttonStyle(GlassButtonStyle())
             Button(action: onExample) {
-                Label("Дай пример", systemImage: "lightbulb")
+                Label("Пример", systemImage: "lightbulb")
+            }
+            .buttonStyle(GlassButtonStyle())
+            Button(action: onAnswerOnly) {
+                Label("Ответ", systemImage: "checkmark.circle")
             }
             .buttonStyle(GlassButtonStyle())
         }
+        .labelStyle(.titleAndIcon)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     private func copy() {
