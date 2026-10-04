@@ -286,9 +286,11 @@ struct ModelView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Рекомендуемые модели", systemImage: "star")
                 .font(.headline)
-            recommended(name: "Qwen2.5 1.5B Instruct · Q4_K_M", file: "qwen2.5-1.5b-instruct-q4_k_m.gguf", size: "≈1.1 ГБ", note: "Для iPhone с 6 ГБ RAM (iPhone 12 Pro, 13, 14, 15). Быстро, хороший русский.")
+            recommended(name: "Qwen3 1.7B · Q8_0", file: "Qwen3-1.7B-Q8_0.gguf", size: "≈1.8 ГБ", note: "Лучший баланс для iPhone с 6 ГБ RAM. Умнее Qwen2.5 1.5B. Лицензия Apache 2.0.")
             Divider()
-            recommended(name: "Qwen2.5 3B Instruct · Q4_K_M", file: "qwen2.5-3b-instruct-q4_k_m.gguf", size: "≈2.1 ГБ", note: "Для iPhone с 8 ГБ RAM (15 Pro, 16, 17). Заметно умнее, медленнее.")
+            recommended(name: "Vikhr Qwen2.5 1.5B · Q4_K_M", file: "Vikhr-Qwen-2.5-1.5b-Instruct-Q4_K_M.gguf", size: "≈1.0 ГБ", note: "Дообучена на русском: лучше язык, быстрая. Apache 2.0.")
+            Divider()
+            recommended(name: "Qwen3 4B · Q4_K_M", file: "Qwen3-4B-Q4_K_M.gguf", size: "≈2.5 ГБ", note: "Самая умная из подходящих. Для 8 ГБ RAM; на 6 ГБ — только с контекстом 1024. Apache 2.0.")
             Divider()
             Text("Подходит любая instruct-модель в формате GGUF, которую поддерживает llama.cpp (Qwen, Llama 3.2, Gemma, Phi). Модели больше 4B на iPhone, как правило, не помещаются в память.")
                 .font(.caption)

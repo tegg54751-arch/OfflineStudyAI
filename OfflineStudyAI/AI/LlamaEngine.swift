@@ -23,6 +23,8 @@ actor LlamaEngine {
     /// Маленькие многоязычные модели (особенно Qwen) иногда «съезжают» на китайский —
     /// запрет на уровне сэмплера делает это невозможным.
     private var bannedTokens: [llama_logit_bias] = []
+    /// Мягкий штраф для токенов из латинских букв (см. GenerationParams.discourageLatin).
+    private var latinPenaltyTokens: [llama_logit_bias] = []
 
     var isLoaded: Bool { model != nil && context != nil }
 
@@ -68,7 +70,7 @@ actor LlamaEngine {
         context = ctx
         vocab = llama_model_get_vocab(loadedModel)
         cachedTokens = []
-        bannedTokens = buildBannedTokens()
+        (bannedTokens, latinPenaltyTokens) = buildTokenFilters()
 
         var descBuffer = [CChar](repeating: 0, count: 256)
         _ = llama_model_desc(loadedModel, &descBuffer, descBuffer.count)
@@ -97,6 +99,7 @@ actor LlamaEngine {
         vocab = nil
         cachedTokens = []
         bannedTokens = []
+        latinPenaltyTokens = []
     }
 
     // MARK: - Генерация
@@ -162,8 +165,9 @@ actor LlamaEngine {
         defer { llama_sampler_free(sampler) }
 
         let nVocab = llama_vocab_n_tokens(vocab)
-        if !bannedTokens.isEmpty {
-            bannedTokens.withUnsafeBufferPointer { buffer in
+        let biases = params.discourageLatin ? bannedTokens + latinPenaltyTokens : bannedTokens
+        if !biases.isEmpty {
+            biases.withUnsafeBufferPointer { buffer in
                 llama_sampler_chain_add(sampler, llama_sampler_init_logit_bias(nVocab, Int32(buffer.count), buffer.baseAddress))
             }
         }
@@ -236,19 +240,27 @@ actor LlamaEngine {
     /// (китайские/японские иероглифы, кана, хангыль, CJK-пунктуация).
     /// В UTF-8 такие символы начинаются с байтов 0xE3…0xED, а кириллица — с 0xD0/0xD1,
     /// поэтому русский текст, латиница и математические символы (0xE2: →, √, —) не затрагиваются.
-    private func buildBannedTokens() -> [llama_logit_bias] {
-        guard let vocab else { return [] }
+    private func buildTokenFilters() -> (banned: [llama_logit_bias], latin: [llama_logit_bias]) {
+        guard let vocab else { return ([], []) }
         let count = llama_vocab_n_tokens(vocab)
-        var result: [llama_logit_bias] = []
-        result.reserveCapacity(20_000)
+        var banned: [llama_logit_bias] = []
+        var latin: [llama_logit_bias] = []
+        banned.reserveCapacity(30_000)
+        latin.reserveCapacity(60_000)
         for token in 0..<count {
             if llama_vocab_is_control(vocab, token) || llama_vocab_is_eog(vocab, token) { continue }
             let bytes = piece(for: token)
             if bytes.contains(where: { $0 >= 0xE3 && $0 <= 0xED }) {
-                result.append(llama_logit_bias(token: token, bias: -Float.infinity))
+                banned.append(llama_logit_bias(token: token, bias: -Float.infinity))
+                continue
+            }
+            // Слово (или кусок слова) только из латинских букв, минимум 2 буквы: «synth», " the".
+            let letters = bytes.drop(while: { $0 == 0x20 })
+            if letters.count >= 2, letters.allSatisfy({ ($0 >= 0x41 && $0 <= 0x5A) || ($0 >= 0x61 && $0 <= 0x7A) }) {
+                latin.append(llama_logit_bias(token: token, bias: -6))
             }
         }
-        return result
+        return (banned, latin)
     }
 
     // MARK: - Промпт

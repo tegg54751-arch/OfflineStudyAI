@@ -103,7 +103,7 @@ final class AppSettings {
         let ctx = defaults.integer(forKey: Keys.contextSize)
         contextSize = ctx > 0 ? ctx : 2048
         let maxTok = defaults.integer(forKey: Keys.maxAnswerTokens)
-        maxAnswerTokens = maxTok > 0 ? maxTok : 600
+        maxAnswerTokens = maxTok > 0 ? maxTok : 900
         temperature = defaults.object(forKey: Keys.temperature) as? Double ?? 0.2
         unloadInBackground = defaults.object(forKey: Keys.unloadInBackground) as? Bool ?? true
         preloadOnLaunch = defaults.object(forKey: Keys.preloadOnLaunch) as? Bool ?? true

@@ -49,7 +49,8 @@ struct SettingsView: View {
                     Picker("Длина ответа", selection: $settings.maxAnswerTokens) {
                         Text("Короткая (300)").tag(300)
                         Text("Средняя (600)").tag(600)
-                        Text("Длинная (1000)").tag(1000)
+                        Text("Длинная (900)").tag(900)
+                        Text("Очень длинная (1500)").tag(1500)
                     }
                     VStack(alignment: .leading) {
                         HStack {

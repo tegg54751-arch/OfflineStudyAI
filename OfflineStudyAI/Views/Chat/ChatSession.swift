@@ -100,6 +100,14 @@ final class ChatSession {
 
     // MARK: - Генерация
 
+    /// Латиница нужна в английском, информатике и формулах — там её не штрафуем.
+    static func shouldDiscourageLatin(subject: Subject, text: String) -> Bool {
+        let latinFriendly: Set<Subject> = [.english, .informatics, .math, .physics, .chemistry]
+        if latinFriendly.contains(subject) { return false }
+        let latinLetters = text.unicodeScalars.filter { ($0.value >= 0x41 && $0.value <= 0x5A) || ($0.value >= 0x61 && $0.value <= 0x7A) }.count
+        return latinLetters < 4
+    }
+
     private func submit(_ text: String, kind: MessageKind) {
         guard !isGenerating else { return }
         errorMessage = nil
@@ -126,7 +134,8 @@ final class ChatSession {
 
         let token = UUID()
         generationToken = token
-        let params = GenerationParams(maxTokens: settings.maxAnswerTokens, temperature: settings.temperature)
+        var params = GenerationParams(maxTokens: settings.maxAnswerTokens, temperature: settings.temperature)
+        params.discourageLatin = Self.shouldDiscourageLatin(subject: conversation.subject, text: text)
 
         generationTask = Task { [weak self] in
             guard let self else { return }

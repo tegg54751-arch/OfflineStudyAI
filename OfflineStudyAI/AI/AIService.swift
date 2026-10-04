@@ -22,6 +22,9 @@ struct GenerationParams: Sendable {
     var topP: Float = 0.9
     var minP: Float = 0.05
     var repeatPenalty: Float = 1.1
+    /// Штрафовать латинские слова (для ответов на русском по биологии, истории и т.п.),
+    /// чтобы модель не вставляла английские куски вроде «synthesизирует».
+    var discourageLatin: Bool = false
 }
 
 struct GenerationStats: Sendable, Hashable {
