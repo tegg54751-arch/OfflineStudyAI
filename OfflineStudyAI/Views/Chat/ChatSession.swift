@@ -137,6 +137,16 @@ final class ChatSession {
         var params = GenerationParams(maxTokens: settings.maxAnswerTokens, temperature: settings.temperature)
         params.discourageLatin = Self.shouldDiscourageLatin(subject: conversation.subject, text: text)
 
+        // Много вопросов в одном сообщении — решаем каждый отдельно, по очереди.
+        // Так маленькая модель отвечает точнее и не теряет вопросы в длинном списке.
+        if kind == .normal || kind == .solve {
+            let items = QuestionSplitter.split(text)
+            if items.count >= 2 {
+                runBatch(items: items, replyID: reply.id, token: token, baseParams: params)
+                return
+            }
+        }
+
         generationTask = Task { [weak self] in
             guard let self else { return }
             var failure: Error?
@@ -159,6 +169,73 @@ final class ChatSession {
             }
             guard self.generationToken == token else { return }
             self.finishGeneration(messageID: reply.id, stats: stats, error: failure)
+        }
+    }
+
+    private func runBatch(items: [QuestionSplitter.Item], replyID: UUID, token: UUID, baseParams: GenerationParams) {
+        let mode = conversation.mode
+        let subject = conversation.subject
+        let style = settings.answerStyle
+        let modelName = models.activeModel?.fileName
+
+        generationTask = Task { [weak self] in
+            guard let self else { return }
+            var sections: [String] = []
+            var failure: Error?
+            var lastStats: GenerationStats?
+            var totalTokens = 0
+            var totalSeconds = 0.0
+
+            for (index, item) in items.enumerated() {
+                if Task.isCancelled || self.generationToken != token { break }
+                let header = "**\(item.label).** _\(item.preview)_"
+                let itemSubject = subject == .general ? SubjectDetector.detect(item.text) : subject
+                let turns = PromptBuilder.batchTurns(item: item.text, mode: mode, subject: itemSubject,
+                                                     settings: self.settings, style: style, modelFileName: modelName)
+                var params = baseParams
+                params.maxTokens = min(baseParams.maxTokens, style == .answerOnly ? 120 : 350)
+                params.discourageLatin = Self.shouldDiscourageLatin(subject: itemSubject, text: item.text)
+
+                var partial = ""
+                let progress = "\n\n_Решаю \(index + 1) из \(items.count)…_"
+                do {
+                    for try await event in self.ai.generate(turns: turns, params: params) {
+                        guard self.generationToken == token else { return }
+                        switch event {
+                        case .token(let piece):
+                            partial += piece
+                            let current = header + "\n" + PromptBuilder.cleanAnswer(partial)
+                            self.updateMessage(id: replyID, text: (sections + [current]).joined(separator: "\n\n") + progress)
+                        case .finished(let s):
+                            lastStats = s
+                            totalTokens += s.generatedTokens
+                            totalSeconds += s.generationSeconds
+                        }
+                    }
+                } catch is CancellationError {
+                    break
+                } catch {
+                    failure = error
+                    break
+                }
+                let answer = PromptBuilder.cleanAnswer(partial)
+                sections.append(header + "\n" + (answer.isEmpty ? "_Нет ответа._" : answer))
+                self.rawBuffer = sections.joined(separator: "\n\n")
+                self.updateMessage(id: replyID, text: self.rawBuffer)
+            }
+
+            guard self.generationToken == token else { return }
+            if sections.count < items.count && failure == nil && !sections.isEmpty {
+                self.rawBuffer += "\n\n_Остановлено: решено \(sections.count) из \(items.count)._"
+            }
+            var stats = lastStats
+            if totalSeconds > 0, var s = stats {
+                s.generatedTokens = totalTokens
+                s.generationSeconds = totalSeconds
+                s.stoppedByLimit = false
+                stats = s
+            }
+            self.finishGeneration(messageID: replyID, stats: stats, error: failure)
         }
     }
 

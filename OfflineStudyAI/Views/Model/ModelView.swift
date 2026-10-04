@@ -275,7 +275,7 @@ struct ModelView: View {
             Label("Как установить модель без интернета на iPhone", systemImage: "questionmark.circle")
                 .font(.headline)
             Text("1. Скачайте файл .gguf на компьютере (один раз).")
-            Text("2. Перенесите на iPhone: AirDrop, «Файлы» → iCloud/флешка, либо Finder (Mac) / приложение Apple Devices или iTunes (Windows) → Общие файлы → Offline Study AI.")
+            Text("2. Перенесите на iPhone: AirDrop, «Файлы» → iCloud/флешка, либо Finder (Mac) / приложение Apple Devices или iTunes (Windows) → Общие файлы → Index AI.")
             Text("3. Нажмите «Импортировать модель» и выберите файл. Файлы, скопированные через Finder/iTunes, подхватываются автоматически.")
         }
         .font(.footnote)
@@ -286,6 +286,8 @@ struct ModelView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Рекомендуемые модели", systemImage: "star")
                 .font(.headline)
+            recommended(name: "Qwen3 4B Instruct 2507 · IQ4_XS", file: "Qwen3-4B-Instruct-2507-IQ4_XS.gguf", size: "≈2.3 ГБ", note: "Рекомендуется. Самая точная из подходящих для iPhone с 6 ГБ+: обновлённая версия 4B без «размышлений», меньше памяти, чем Q4_K_M. Apache 2.0.")
+            Divider()
             recommended(name: "Qwen3 1.7B · Q8_0", file: "Qwen3-1.7B-Q8_0.gguf", size: "≈1.8 ГБ", note: "Лучший баланс для iPhone с 6 ГБ RAM. Умнее Qwen2.5 1.5B. Лицензия Apache 2.0.")
             Divider()
             recommended(name: "Vikhr Qwen2.5 1.5B · Q4_K_M", file: "Vikhr-Qwen-2.5-1.5b-Instruct-Q4_K_M.gguf", size: "≈1.0 ГБ", note: "Дообучена на русском: лучше язык, быстрая. Apache 2.0.")

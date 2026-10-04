@@ -59,7 +59,7 @@ struct MessageBubble: View {
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
                     .background(Palette.brandGradient, in: Circle())
-                Text("Offline Study AI")
+                Text("Index AI")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 if let speed = message.tokensPerSecond, !isStreaming {

@@ -40,7 +40,7 @@ struct HomeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Offline Study AI")
+            Text("Index AI")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.brandGradient)
             HStack(spacing: 8) {

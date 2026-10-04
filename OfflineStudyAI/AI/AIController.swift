@@ -249,6 +249,9 @@ final class AIController {
             }
         case .active:
             refreshState()
+            // Вернулись в приложение, а модель выгружена (iOS освободил память
+            // или включена выгрузка в фоне) — загружаем сразу, не дожидаясь вопроса.
+            Task { await preloadIfNeeded() }
         default:
             break
         }

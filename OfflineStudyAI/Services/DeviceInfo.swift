@@ -60,8 +60,8 @@ enum DeviceInfo {
     /// Грубая оценка памяти, нужной для модели: веса + KV-кэш + рабочие буферы.
     static func estimatedMemory(forModelFileSize fileSize: UInt64, contextSize: Int) -> UInt64 {
         // KV-кэш для 1.5–3B моделей ~ 30–110 КБ на токен (с GQA меньше). Берём с запасом.
-        let kvCache = UInt64(contextSize) * 90 * 1024
-        let workBuffers: UInt64 = 250 * 1024 * 1024
+        let kvCache = UInt64(contextSize) * 50 * 1024
+        let workBuffers: UInt64 = 200 * 1024 * 1024
         return fileSize + kvCache + workBuffers
     }
 }

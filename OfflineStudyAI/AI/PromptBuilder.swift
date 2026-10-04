@@ -11,34 +11,42 @@ enum PromptBuilder {
     /// дополнительно обрежет историю по токенам, если она не влезает в контекст).
     static let maxHistoryMessages = 10
 
+    /// Базовые правила (сформулированы автором приложения).
+    static let corePrompt = """
+    Ты — Index AI, офлайн-помощник для школьного обучения. Отвечай только на русском языке.
+    Не выдумывай факты. Если не уверен в ответе, прямо скажи «Я не уверен» вместо того, чтобы придумывать ответ.
+    Для математических и физических задач сначала выполни вычисления, затем проверь результат.
+    Для исторических вопросов внимательно проверяй даты, имена и события.
+    Для биологии, химии и географии используй общеизвестные школьные факты.
+    Если вопрос содержит недостаточно информации, сообщи об этом.
+    Ответ должен быть кратким, понятным ученику и соответствовать школьной программе.
+    """
+
     static func systemPrompt(mode: ChatMode, subject: Subject, settings: AppSettings) -> String {
-        var lines: [String] = []
-        lines.append("Ты — «Offline Study AI», школьный помощник по всем предметам.")
-        lines.append("Пиши ТОЛЬКО на русском языке. Никогда не используй китайский или другие языки.")
+        var lines: [String] = [corePrompt]
         lines.append("Ученик учится в \(settings.grade.promptDescription).")
 
         switch settings.answerStyle {
         case .answerOnly:
             lines.append("Давай только итоговый ответ, без пересказа условия и без объяснений.")
         case .short:
-            lines.append("Отвечай кратко: сначала сам ответ, потом 2–4 предложения пояснения.")
+            lines.append("Сначала сам ответ, потом 1–3 предложения пояснения.")
         case .detailed:
-            lines.append("Отвечай подробно: сначала ответ, потом объяснение по шагам и пример.")
+            lines.append("Сначала ответ, потом объяснение по шагам и пример.")
         }
 
         if subject != .general {
             lines.append("Предмет: \(subject.title).")
         }
 
-        lines.append("Никогда не переписывай условие задания и варианты ответа — сразу отвечай.")
+        lines.append("Не переписывай условие задания и варианты ответа — сразу отвечай.")
         lines.append("Используй Markdown: **жирный** для главного, списки для шагов. Формулы — в LaTeX внутри $...$.")
-        lines.append("Если не уверен — честно скажи. Не выдумывай факты.")
 
         if mode == .solve {
             lines.append("""
             Режим «Решить задание». Формат:
             **Ответ:** итоговый ответ
-            **Решение:** 2–5 коротких шагов
+            **Решение:** 2–5 коротких шагов с проверкой
             """)
         }
         return lines.joined(separator: "\n")
@@ -83,12 +91,30 @@ enum PromptBuilder {
             content += "\n\n(\(instruction))"
 
             // У Qwen3 есть «режим размышлений» — для школьных ответов он только замедляет.
-            if let name = modelFileName?.lowercased(), name.contains("qwen3") {
+            if let name = modelFileName?.lowercased(), name.contains("qwen3"), !name.contains("2507"), !name.contains("instruct") {
                 content += " /no_think"
             }
             turns[lastUser].content = content
         }
         return turns
+    }
+
+    /// Один вопрос из пачки: без истории чата, с жёстким кратким форматом.
+    static func batchTurns(item: String, mode: ChatMode, subject: Subject, settings: AppSettings,
+                           style: AnswerStyle, modelFileName: String?) -> [ChatTurn] {
+        var system = systemPrompt(mode: .ask, subject: subject, settings: settings)
+        system += "\nТебе дают один вопрос из списка. Ответь только на него."
+        var instruction = finalInstruction(for: item, kind: .normal, mode: mode, style: style, previousTask: nil)
+        if style == .answerOnly {
+            instruction += " Выведи только ответ одной строкой. Если не уверен — напиши «Я не уверен»."
+        } else {
+            instruction += " Формат: «**Ответ:** …», затем не больше двух коротких предложений пояснения. Если не уверен — напиши «Я не уверен»."
+        }
+        var content = item + "\n\n(" + instruction + ")"
+        if let name = modelFileName?.lowercased(), name.contains("qwen3"), !name.contains("2507"), !name.contains("instruct") {
+            content += " /no_think"
+        }
+        return [ChatTurn(role: .system, content: system), ChatTurn(role: .user, content: content)]
     }
 
     // MARK: - Инструкция к последнему вопросу

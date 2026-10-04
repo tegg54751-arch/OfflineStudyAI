@@ -52,16 +52,31 @@ actor LlamaEngine {
         var nCtx = max(512, contextSize)
         if trainContext > 0 { nCtx = min(nCtx, trainContext) }
 
-        let threads = Int32(max(1, min(6, ProcessInfo.processInfo.activeProcessorCount - 2)))
+        // На iPhone основная работа идёт на GPU (Metal), CPU-потоков много не нужно —
+        // меньше потоков = меньше нагрев и расход батареи.
+        let threads = Int32(max(1, min(4, ProcessInfo.processInfo.activeProcessorCount - 2)))
 
         var ctxParams = llama_context_default_params()
         ctxParams.n_ctx = UInt32(nCtx)
-        ctxParams.n_batch = 512
-        ctxParams.n_ubatch = 512
+        // Меньший физический батч = меньше рабочий буфер в памяти (~в 2 раза).
+        ctxParams.n_batch = 256
+        ctxParams.n_ubatch = 256
         ctxParams.n_threads = threads
         ctxParams.n_threads_batch = threads
+        // KV-кэш в 8 битах вместо 16 — вдвое меньше памяти на контекст.
+        ctxParams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED
+        ctxParams.type_k = GGML_TYPE_Q8_0
+        ctxParams.type_v = GGML_TYPE_Q8_0
 
-        guard let ctx = llama_init_from_model(loadedModel, ctxParams) else {
+        var createdContext = llama_init_from_model(loadedModel, ctxParams)
+        if createdContext == nil {
+            // Запасной вариант для моделей/устройств без поддержки сжатого KV-кэша.
+            ctxParams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO
+            ctxParams.type_k = GGML_TYPE_F16
+            ctxParams.type_v = GGML_TYPE_F16
+            createdContext = llama_init_from_model(loadedModel, ctxParams)
+        }
+        guard let ctx = createdContext else {
             llama_model_free(loadedModel)
             throw AIError.contextInitFailed
         }
@@ -212,6 +227,15 @@ actor LlamaEngine {
             cachedTokens.append(token)
             nPos += 1
             generated += 1
+
+            // Телефон перегрелся — немного притормаживаем, чтобы не «жарить» его.
+            if generated % 16 == 0 {
+                switch ProcessInfo.processInfo.thermalState {
+                case .serious: usleep(25_000)
+                case .critical: usleep(80_000)
+                default: break
+                }
+            }
         }
 
         if !pendingBytes.isEmpty {
