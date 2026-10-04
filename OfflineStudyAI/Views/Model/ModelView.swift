@@ -247,7 +247,7 @@ struct ModelView: View {
                     models.select(model)
                     Task {
                         await ai.unload()
-                        try? await ai.ensureLoaded()
+                        _ = try? await ai.ensureLoaded()
                     }
                 }
                 if model.id != models.models.last?.id { Divider() }

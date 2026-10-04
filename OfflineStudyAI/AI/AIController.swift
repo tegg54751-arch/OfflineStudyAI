@@ -89,7 +89,7 @@ final class AIController {
             refreshState()
             return
         }
-        try? await ensureLoaded()
+        _ = try? await ensureLoaded()
     }
 
     /// Гарантирует, что активная модель загружена с текущим размером контекста.

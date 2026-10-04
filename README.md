@@ -125,7 +125,7 @@ OfflineStudyAI/
    только для сборки. Если пакет не подтянулся: **File → Packages → Reset Package Caches**.
 4. Слева выберите проект **OfflineStudyAI** → таргет **OfflineStudyAI** → вкладка **Signing & Capabilities**:
    - **Team**: нажмите *Add Account…*, войдите своим Apple ID, выберите команду «Ваше имя (Personal Team)»;
-   - **Bundle Identifier**: замените `com.example.offlinestudyai` на уникальный, например `com.ivanov.offlinestudyai`.
+   - **Bundle Identifier**: замените `com.tegg54751.offlinestudyai` на уникальный, например `com.ivanov.offlinestudyai`.
 
 ---
 
