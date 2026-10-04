@@ -29,6 +29,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Install NDK, CMake, SDK
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "ndk;29.0.13113456" "cmake;3.31.6" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          ls "$ANDROID_HOME/ndk"
+
       - name: Get llama.cpp (b11380)
         run: git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp app/src/main/cpp/llama.cpp
 
