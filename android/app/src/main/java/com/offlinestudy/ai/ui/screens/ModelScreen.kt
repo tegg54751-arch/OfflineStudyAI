@@ -183,12 +183,12 @@ fun ModelScreen(onBack: () -> Unit) {
             GlassCard {
                 Text("Рекомендуемые модели", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Spacer(Modifier.height(6.dp))
-                Recommended("Qwen3 1.7B · Q4_K_M", "≈1.1 ГБ",
-                    "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
-                    "Для большинства телефонов (6 ГБ RAM и больше). Быстрая.")
+                Recommended("Qwen3 1.7B · Q4_0", "≈1.0 ГБ",
+                    "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
+                    "Для большинства телефонов (6 ГБ RAM и больше). Формат Q4_0 на Android работает быстрее всего.")
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Recommended("Qwen3 4B Instruct 2507 · IQ4_XS", "≈2.3 ГБ",
-                    "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-IQ4_XS.gguf",
+                Recommended("Qwen3 4B Instruct 2507 · Q4_0", "≈2.4 ГБ",
+                    "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_0.gguf",
                     "Самая точная. Для телефонов с 8 ГБ RAM и больше; отвечает медленнее.")
                 Spacer(Modifier.height(6.dp))
                 Text("Откройте ссылку в браузере телефона, скачайте файл, затем нажмите «Импортировать модель» и выберите его в «Загрузках».",

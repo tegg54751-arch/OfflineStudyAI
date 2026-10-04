@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -53,25 +54,35 @@ import kotlin.math.sin
 /** Фон с мягкими «живыми» цветными пятнами. */
 @Composable
 fun AppBackground(content: @Composable BoxScope.() -> Unit) {
-    val dark = LocalIsDark.current
-    val transition = rememberInfiniteTransition(label = "bg")
-    val t by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "t")
     if (LocalStyle.current.minimal) {
         // «Минимал»: чистый чёрный фон без цветных пятен.
         Box(Modifier.fillMaxSize().background(Color.Black)) { content() }
         return
     }
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Box(
-            Modifier.offset(x = (60 + 60 * t).dp, y = (-40 + 50 * t).dp).size(320.dp).blur(90.dp)
-                .background(Palette.Violet.copy(alpha = if (dark) 0.35f else 0.22f), CircleShape)
-        )
-        Box(
-            Modifier.align(Alignment.BottomStart).offset(x = (-80 + 40 * t).dp, y = (60 - 70 * t).dp).size(300.dp).blur(90.dp)
-                .background(Palette.Teal.copy(alpha = if (dark) 0.28f else 0.18f), CircleShape)
-        )
-        content()
-    }
+    // Статичные мягкие пятна из радиальных градиентов: без размытия и анимации —
+    // одинаково выглядит на всех версиях Android и не нагружает видеочип.
+    val dark = LocalIsDark.current
+    val base = MaterialTheme.colorScheme.background
+    val violet = Palette.Violet.copy(alpha = if (dark) 0.30f else 0.18f)
+    val teal = Palette.Teal.copy(alpha = if (dark) 0.22f else 0.14f)
+    Box(
+        Modifier.fillMaxSize().background(base).drawBehind {
+            drawRect(
+                Brush.radialGradient(
+                    listOf(violet, Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.08f),
+                    radius = size.minDimension * 0.9f
+                )
+            )
+            drawRect(
+                Brush.radialGradient(
+                    listOf(teal, Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.1f, size.height * 0.92f),
+                    radius = size.minDimension * 0.9f
+                )
+            )
+        }
+    ) { content() }
 }
 
 /** «Стеклянная» карточка. */

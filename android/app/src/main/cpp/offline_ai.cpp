@@ -84,12 +84,12 @@ std::string json_escape(const std::string &s) {
     return out;
 }
 
-std::string token_piece(const llama_vocab *vocab, llama_token token) {
+std::string token_piece(const llama_vocab *vocab, llama_token token, bool special = false) {
     char buf[128];
-    int n = llama_token_to_piece(vocab, token, buf, sizeof(buf), 0, false);
+    int n = llama_token_to_piece(vocab, token, buf, sizeof(buf), 0, special);
     if (n < 0) {
         std::string big(static_cast<size_t>(-n), '\0');
-        n = llama_token_to_piece(vocab, token, big.data(), static_cast<int32_t>(big.size()), 0, false);
+        n = llama_token_to_piece(vocab, token, big.data(), static_cast<int32_t>(big.size()), 0, special);
         if (n < 0) return {};
         big.resize(static_cast<size_t>(n));
         return big;
@@ -176,6 +176,14 @@ size_t valid_utf8_prefix(const std::string &s) {
     return len; // одни байты продолжения — отдаём как есть
 }
 
+/// Первые байты UTF-8 для письменностей, которые в школьных ответах на русском не нужны:
+/// иероглифы/кана/хангыль (E3–ED), полноширинные формы (EF), эмодзи и редкие символы (F0–F4),
+/// армянский/иврит/арабский (D4–DF), индийские, тайский (E0), грузинский/мьянма и т.п. (E1).
+/// Кириллица (D0–D3), латиница, греческие буквы (CE–CF), °/²/× (C2–C3) и математика (E2) разрешены.
+bool is_foreign_lead_byte(unsigned char c) {
+    return (c >= 0xD4 && c <= 0xDF) || c == 0xE0 || c == 0xE1 || (c >= 0xE3 && c <= 0xEF) || (c >= 0xF0 && c <= 0xF4);
+}
+
 void build_filters(Engine &engine) {
     engine.banned.clear();
     engine.latin.clear();
@@ -185,7 +193,7 @@ void build_filters(Engine &engine) {
         const std::string piece = token_piece(engine.vocab, token);
         bool cjk = false;
         for (unsigned char c : piece) {
-            if (c >= 0xE3 && c <= 0xED) { cjk = true; break; }
+            if (is_foreign_lead_byte(c)) { cjk = true; break; }
         }
         if (cjk) {
             engine.banned.push_back({token, -INFINITY});
@@ -269,22 +277,14 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
 
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx = static_cast<uint32_t>(n_ctx);
-    // Меньший батч = меньше рабочий буфер; KV-кэш в 8 битах = вдвое меньше памяти на контекст.
+    // Меньший батч = меньше рабочий буфер. KV-кэш на Android оставляем в f16:
+    // на некоторых процессорах сжатый кэш давал «мусорные» ответы.
     cparams.n_batch = 256;
     cparams.n_ubatch = 256;
     cparams.n_threads = std::max(1, static_cast<int>(n_threads));
     cparams.n_threads_batch = cparams.n_threads;
-    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
-    cparams.type_k = GGML_TYPE_Q8_0;
-    cparams.type_v = GGML_TYPE_Q8_0;
 
     llama_context *ctx = llama_init_from_model(model, cparams);
-    if (!ctx) {
-        cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
-        cparams.type_k = GGML_TYPE_F16;
-        cparams.type_v = GGML_TYPE_F16;
-        ctx = llama_init_from_model(model, cparams);
-    }
     if (!ctx) {
         llama_model_free(model);
         g_last_error = "context_init_failed";
@@ -481,7 +481,7 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
         const llama_token token = llama_sampler_sample(sampler, ctx, -1);
         if (llama_vocab_is_eog(vocab, token)) break;
 
-        pending += token_piece(vocab, token);
+        pending += token_piece(vocab, token, true); // <think> и т.п. видны — PromptBuilder.cleanAnswer их уберёт
         const size_t ready = valid_utf8_prefix(pending);
         if (ready > 0) {
             emit(pending.substr(0, ready));
