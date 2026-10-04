@@ -108,10 +108,10 @@ jobs:
         run: |
           mkdir -p arm-out
           {
-            sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential libgomp1 qemu-user
+            sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential clang libomp-dev qemu-user
             git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp
             cd llama.cpp
-            cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
+            CC=clang CXX=clang++ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
               -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_CPU_KLEIDIAI=ON -DGGML_OPENMP=ON \
               -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF -DLLAMA_BUILD_EXAMPLES=ON
             cmake --build build -j 4 --target llama-simple
@@ -119,10 +119,10 @@ jobs:
           } > arm-out/build.txt 2>&1 || true
           tail -60 arm-out/build.txt
           lscpu > arm-out/cpu.txt
-          cd llama.cpp/build/bin || exit 0
+          cd llama.cpp/build/bin || { echo 'build failed'; exit 0; }
           ( timeout 600 ./llama-simple -m ../../../model.gguf -n 48 "Столица Франции — это" ) > ../../../arm-out/native.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/native.txt
           ( timeout 2400 qemu-aarch64 -cpu cortex-a53 ./llama-simple -m ../../../model.gguf -n 8 "Столица Франции — это" ) > ../../../arm-out/cortex-a53.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/cortex-a53.txt
-          tail -20 ../../../arm-out/native.txt ../../../arm-out/cortex-a53.txt
+          tail -20 ../../../arm-out/native.txt ../../../arm-out/cortex-a53.txt || true
 
       - name: Publish ARM results
         if: always()
