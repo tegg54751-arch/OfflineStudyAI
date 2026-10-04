@@ -46,9 +46,19 @@ object DeviceInfo {
     fun estimatedMemory(modelFileSize: Long, contextSize: Int): Long =
         modelFileSize + contextSize.toLong() * 50 * 1024 + 250L * 1024 * 1024
 
-    /** Число «больших» ядер для вычислений: обычно 4 на телефонах среднего класса. */
+    /**
+     * Сколько потоков дать модели. На телефонах ядра разные (2 быстрых + 6 медленных и т.п.),
+     * а llama.cpp ждёт самый медленный поток — поэтому берём только быстрые ядра.
+     */
     fun recommendedThreads(): Int {
-        val cores = Runtime.getRuntime().availableProcessors()
-        return (cores - 2).coerceIn(2, 4)
+        val freqs = (0 until Runtime.getRuntime().availableProcessors()).mapNotNull { cpu ->
+            runCatching {
+                java.io.File("/sys/devices/system/cpu/cpu$cpu/cpufreq/cpuinfo_max_freq").readText().trim().toLong()
+            }.getOrNull()
+        }
+        if (freqs.isEmpty()) return (Runtime.getRuntime().availableProcessors() - 2).coerceIn(2, 4)
+        val top = freqs.max()
+        val fast = freqs.count { it >= top * 0.75 }
+        return fast.coerceIn(2, 4)
     }
 }

@@ -106,12 +106,26 @@ class AIController(
             loadedPath = model.file.absolutePath
             loadedContext = settings.contextSize
             state = ModelState.Ready
+            warmUp()
             info
         } catch (e: Exception) {
             loadedInfo = null
             loadedPath = null
             state = ModelState.Failed(e.message ?: "Ошибка загрузки")
             throw e
+        }
+    }
+
+    /** Сразу после загрузки обрабатываем системные правила, чтобы первый ответ начался быстрее. */
+    private fun warmUp() {
+        scope.launch {
+            runCatching {
+                val turns = listOf(
+                    ChatTurn(ChatTurn.Role.SYSTEM, PromptBuilder.systemPrompt(com.offlinestudy.ai.data.ChatMode.ASK, com.offlinestudy.ai.data.Subject.GENERAL, settings)),
+                    ChatTurn(ChatTurn.Role.USER, "Привет")
+                )
+                service.generate(turns, GenerationParams(maxTokens = 0)).collect { }
+            }
         }
     }
 

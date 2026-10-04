@@ -445,6 +445,16 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
     }
     const double prompt_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - prompt_start).count();
 
+    // Прогрев: только обработать промпт (системные правила попадут в KV-кэш),
+    // чтобы первый настоящий вопрос начинался без долгого ожидания.
+    if (max_tokens <= 0) {
+        std::string stats = "{\"promptTokens\":" + std::to_string(prompt.size()) +
+            ",\"reusedPromptTokens\":" + std::to_string(common) +
+            ",\"generatedTokens\":0,\"promptSeconds\":" + std::to_string(prompt_seconds) +
+            ",\"generationSeconds\":0,\"stoppedByLimit\":false,\"cancelled\":false}";
+        return env->NewStringUTF(stats.c_str());
+    }
+
     // 4. Сэмплер.
     llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     struct SamplerGuard { llama_sampler *s; ~SamplerGuard() { llama_sampler_free(s); } } sguard{sampler};

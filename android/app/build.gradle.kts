@@ -25,8 +25,8 @@ android {
         applicationId = "com.tegg54751.offlinestudyai"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
