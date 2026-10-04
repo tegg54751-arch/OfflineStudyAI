@@ -161,8 +161,8 @@ fun ChatScreen() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (session.conversation.isEmpty) "Спросить" else session.conversation.subject.title,
-                        fontSize = 22.sp, fontWeight = FontWeight.Bold
+                        if (session.conversation.isEmpty) "Спросить" else "Чат",
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1
                     )
                 }
                 if (!session.conversation.isEmpty) {

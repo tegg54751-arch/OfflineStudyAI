@@ -87,22 +87,12 @@ jobs:
           gh release create "selftest-${{ github.run_number }}" * \
             --title "Автотест ${{ github.run_number }}" --notes "Результаты автотеста в эмуляторе." --prerelease
 
-  # Проверка движка на настоящем ARM-процессоре (как в телефонах) с теми же настройками сборки.
+  # Проверка движка на ARM: (1) на настоящем ARM-процессоре сервера,
+  # (2) в эмуляции старого ядра Cortex-A53 (ARMv8.0, без dotprod) — как в бюджетных телефонах.
   arm-engine:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
-      - name: Build llama.cpp b11380 (Android-like CPU config)
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential libgomp1 > /dev/null
-          git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp
-          cd llama.cpp
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
-            -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_CPU_KLEIDIAI=ON -DGGML_OPENMP=ON \
-            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF > /dev/null
-          cmake --build build -j 4 --target llama-simple llama-cli 2>&1 | tail -3
-          ls build/bin
-
       - name: Cache model
         id: cache-model
         uses: actions/cache@v4
@@ -114,12 +104,25 @@ jobs:
         if: steps.cache-model.outputs.cache-hit != 'true'
         run: curl -sSL -o model.gguf https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf
 
-      - name: Run model on ARM CPU
+      - name: Build and run
         run: |
           mkdir -p arm-out
+          {
+            sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential libgomp1 qemu-user
+            git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp
+            cd llama.cpp
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
+              -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_CPU_KLEIDIAI=ON -DGGML_OPENMP=ON \
+              -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF -DLLAMA_BUILD_EXAMPLES=ON
+            cmake --build build -j 4 --target llama-simple
+            ls -la build/bin
+          } > arm-out/build.txt 2>&1 || true
+          tail -60 arm-out/build.txt
           lscpu > arm-out/cpu.txt
-          (cd llama.cpp/build/bin && ./llama-simple -m ../../../model.gguf -n 64 "Столица Франции — это" ) > arm-out/simple.txt 2>&1 || echo "EXIT $?" >> arm-out/simple.txt
-          tail -40 arm-out/simple.txt
+          cd llama.cpp/build/bin || exit 0
+          ( timeout 600 ./llama-simple -m ../../../model.gguf -n 48 "Столица Франции — это" ) > ../../../arm-out/native.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/native.txt
+          ( timeout 2400 qemu-aarch64 -cpu cortex-a53 ./llama-simple -m ../../../model.gguf -n 8 "Столица Франции — это" ) > ../../../arm-out/cortex-a53.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/cortex-a53.txt
+          tail -20 ../../../arm-out/native.txt ../../../arm-out/cortex-a53.txt
 
       - name: Publish ARM results
         if: always()
@@ -127,4 +130,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "selftest-arm-${{ github.run_number }}" arm-out/* -R "${{ github.repository }}" \
-            --title "Тест движка на ARM ${{ github.run_number }}" --notes "llama.cpp b11380 на ARM CPU." --prerelease
+            --title "Тест движка на ARM ${{ github.run_number }}" --notes "llama.cpp b11380 на ARM CPU и в эмуляции Cortex-A53." --prerelease

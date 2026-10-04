@@ -13,7 +13,7 @@ on:
   push:
     branches: ["main", "master"]
     tags: ["v*"]
-    paths-ignore: ["android/**", ".github/workflows/build-android.yml"]
+    paths-ignore: ["android/**", ".github/workflows/build-android.yml", ".github/workflows/android-selftest.yml"]
 
 permissions:
   contents: write

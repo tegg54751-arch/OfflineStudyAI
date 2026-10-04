@@ -72,7 +72,7 @@ fun HomeScreen() {
             // Заголовок
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Offline Study AI",
+                    "Index AI",
                     style = TextStyle(brush = LocalStyle.current.brand, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 )
                 Row(
