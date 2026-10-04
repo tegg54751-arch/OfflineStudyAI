@@ -15,6 +15,7 @@ struct ChatView: View {
     @State private var pickedItem: PhotosPickerItem?
     @State private var ocrImage: UIImage?
     @State private var ocrText = ""
+    @State private var ocrLines: [OCRLine] = []
     @State private var showOCRSheet = false
     @State private var isRecognizing = false
     @State private var ocrError: String?
@@ -92,7 +93,7 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showOCRSheet) {
-            OCRResultSheet(image: ocrImage, text: $ocrText) { action in
+            OCRResultSheet(image: ocrImage, lines: $ocrLines, text: $ocrText) { action in
                 showOCRSheet = false
                 let text = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { return }
@@ -226,9 +227,10 @@ struct ChatView: View {
         withAnimation { isRecognizing = true }
         defer { withAnimation { isRecognizing = false } }
         do {
-            let text = try await OCRService.recognizeText(in: image)
+            let lines = try await OCRService.recognizeLines(in: image)
             ocrImage = image
-            ocrText = text
+            ocrLines = lines
+            ocrText = OCRService.text(from: lines)
             showOCRSheet = true
         } catch {
             ocrError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -364,9 +366,12 @@ struct OCRResultSheet: View {
     enum Action { case solve, ask }
 
     let image: UIImage?
+    @Binding var lines: [OCRLine]
     @Binding var text: String
     var onAction: (Action) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    private var hasHandwriting: Bool { lines.contains(where: \.isLikelyHandwritten) }
 
     var body: some View {
         NavigationStack {
@@ -376,17 +381,53 @@ struct OCRResultSheet: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
-                            .frame(maxHeight: 220)
+                            .frame(maxHeight: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .frame(maxWidth: .infinity)
                     }
 
-                    Text("Проверьте и при необходимости исправьте распознанный текст:")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Найденные строки")
+                            .font(.headline)
+                        Text(hasHandwriting
+                             ? "Записи ручкой (✍️) отключены, чтобы не мешать AI. Нажмите на строку, чтобы включить или выключить её."
+                             : "Нажмите на строку, чтобы исключить её из задания.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        ForEach($lines) { $line in
+                            if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                                Button {
+                                    line.isIncluded.toggle()
+                                    text = OCRService.text(from: lines)
+                                } label: {
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Image(systemName: line.isIncluded ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(line.isIncluded ? Color.accentColor : Color.secondary)
+                                        Text(line.text)
+                                            .strikethrough(!line.isIncluded)
+                                            .foregroundStyle(line.isIncluded ? Color.primary : Color.secondary)
+                                            .multilineTextAlignment(.leading)
+                                        Spacer(minLength: 4)
+                                        if line.isLikelyHandwritten {
+                                            Text("✍️")
+                                        }
+                                    }
+                                    .font(.subheadline)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Text("Текст для AI (можно исправить):")
+                        .font(.headline)
 
                     TextEditor(text: $text)
-                        .frame(minHeight: 180)
+                        .frame(minHeight: 160)
                         .padding(8)
                         .scrollContentBackground(.hidden)
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

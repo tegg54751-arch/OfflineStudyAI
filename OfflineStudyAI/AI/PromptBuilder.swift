@@ -107,10 +107,25 @@ enum PromptBuilder {
             } else {
                 parts.append("Выведи ТОЛЬКО ответ одной-двумя строками. Не переписывай условие и не объясняй")
             }
-        } else if multipleChoice {
-            parts.append("Это тест с вариантами ответа. Не переписывай вопрос и варианты. Сначала напиши «**Ответ:** буква/номер — текст правильного варианта», затем одно-два предложения, почему")
-        } else if mode == .solve || kind == .solve {
-            parts.append("Начни со строки «**Ответ:** …», потом коротко реши по шагам. Не переписывай условие")
+        } else {
+            let lower = taskText.lowercased()
+            let matching = lower.contains("соответств")
+            let blank = isFillInTheBlank(taskText)
+            if manyTasks {
+                parts.append("В тексте несколько заданий — ответь на каждое по порядку, начиная с его номера. Не переписывай условия")
+            }
+            if matching {
+                parts.append("В задании на соответствие слева — пронумерованные элементы (1, 2, 3…), справа — буквы (А, Б, В…). Порядок строк НЕ означает соответствие: для каждого номера выбери букву по смыслу. Ответ в виде «1 — Б, 2 — А, 3 — В» и по одному предложению, почему")
+            }
+            if blank {
+                parts.append("В задании с пропуском («…», «___») вставь подходящее по смыслу школьное слово или термин и напиши предложение целиком. Не придумывай названия, которых нет в учебнике")
+            }
+            if multipleChoice && !(matching && !manyTasks) {
+                parts.append("В тесте с вариантами сначала напиши «**Ответ:** буква/номер — текст правильного варианта», затем одно-два предложения, почему. Не переписывай вопрос и варианты")
+            }
+            if parts.isEmpty && (mode == .solve || kind == .solve) {
+                parts.append("Начни со строки «**Ответ:** …», потом коротко реши по шагам. Не переписывай условие")
+            }
         }
         parts.append("Отвечай на русском языке")
         return parts.joined(separator: ". ") + "."
@@ -123,6 +138,15 @@ enum PromptBuilder {
                        "только правильн", "скинь ответ", "дай ответ", "напиши ответ", "только буквы",
                        "без пояснен", "кратко ответ", "только вариант"]
         return phrases.contains { lower.contains($0) }
+    }
+
+    /// Задание «вставьте пропущенное слово».
+    static func isFillInTheBlank(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        if ["пропущ", "вставьте", "вставь ", "впишите", "заполните пропуск", "закончите предложение", "допишите"].contains(where: { lower.contains($0) }) {
+            return true
+        }
+        return text.contains("___") || text.contains("…") || text.range(of: #"\.{3,}|_{2,}"#, options: .regularExpression) != nil
     }
 
     /// Похоже на тест: минимум два варианта вида «а) …», «Б. …», «1) …», «A) …».
@@ -143,11 +167,18 @@ enum PromptBuilder {
 
     /// Сколько пронумерованных заданий в тексте («1.», «2.», «Задание 3» …).
     static func countNumberedTasks(_ text: String) -> Int {
-        let pattern = #"(?m)^\s*(задание\s*)?\d{1,2}\s*[\.\)]\s+\S"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return 0 }
+        // Есть явные «Задание 1», «Задание 2» — считаем только их
+        // (пронумерованные строки внутри задания — это элементы, а не задания).
+        if let explicit = try? NSRegularExpression(pattern: #"(?m)^\s*(задание|задача|вопрос|№)\s*\d{1,2}"#, options: [.caseInsensitive]) {
+            let count = explicit.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+            if count > 0 { return count }
+        }
+        let pattern = #"(?m)^\s*\d{1,2}\s*[\.\)]\s+\S"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return 0 }
         let count = regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-        // Если это варианты одного теста, а не отдельные задания — не считаем.
-        return looksLikeMultipleChoice(text) && count <= 6 && !text.lowercased().contains("задание") ? 0 : count
+        // Варианты одного теста или строки таблицы соответствия — не отдельные задания.
+        if looksLikeMultipleChoice(text) || text.lowercased().contains("соответств") { return 0 }
+        return count
     }
 
     static func containsCJK(_ text: String) -> Bool {
