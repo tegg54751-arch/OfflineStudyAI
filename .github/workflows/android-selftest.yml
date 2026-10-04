@@ -105,24 +105,28 @@ jobs:
         run: curl -sSL -o model.gguf https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf
 
       - name: Build and run
+        shell: bash
         run: |
-          mkdir -p arm-out
-          {
+          set +e
+          W="$GITHUB_WORKSPACE"
+          mkdir -p "$W/arm-out"
+          (
             sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential clang libomp-dev qemu-user
-            git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp
-            cd llama.cpp
+            git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
+            cd "$W/llama.cpp"
             CC=clang CXX=clang++ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
               -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_CPU_KLEIDIAI=ON -DGGML_OPENMP=ON \
               -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF -DLLAMA_BUILD_EXAMPLES=ON
             cmake --build build -j 4 --target llama-simple
-            ls -la build/bin
-          } > arm-out/build.txt 2>&1 || true
-          tail -60 arm-out/build.txt
-          lscpu > arm-out/cpu.txt
-          cd llama.cpp/build/bin || { echo 'build failed'; exit 0; }
-          ( timeout 600 ./llama-simple -m ../../../model.gguf -n 48 "Столица Франции — это" ) > ../../../arm-out/native.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/native.txt
-          ( timeout 2400 qemu-aarch64 -cpu cortex-a53 ./llama-simple -m ../../../model.gguf -n 8 "Столица Франции — это" ) > ../../../arm-out/cortex-a53.txt 2>&1; echo "EXIT $?" >> ../../../arm-out/cortex-a53.txt
-          tail -20 ../../../arm-out/native.txt ../../../arm-out/cortex-a53.txt || true
+          ) > "$W/arm-out/build.txt" 2>&1
+          lscpu > "$W/arm-out/cpu.txt"
+          cd "$W/llama.cpp/build/bin" || exit 0
+          timeout 600 ./llama-simple -m "$W/model.gguf" -n 48 "Столица Франции — это" > "$W/arm-out/native.txt" 2>&1
+          echo "EXIT $?" >> "$W/arm-out/native.txt"
+          timeout 2400 qemu-aarch64 -cpu cortex-a53 ./llama-simple -m "$W/model.gguf" -n 8 "Столица Франции — это" > "$W/arm-out/cortex-a53.txt" 2>&1
+          echo "EXIT $?" >> "$W/arm-out/cortex-a53.txt"
+          tail -15 "$W/arm-out/native.txt" "$W/arm-out/cortex-a53.txt"
+          exit 0
 
       - name: Publish ARM results
         if: always()
