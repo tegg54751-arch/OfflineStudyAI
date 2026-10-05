@@ -126,7 +126,7 @@ class ChatSession(
             c = c.copy(subject = SubjectDetector.detect(text))
         }
         c = c.copy(messages = c.messages + ChatMessage(role = MessageRole.USER, text = text, kind = kind))
-        val turns = PromptBuilder.turns(c, settings, models.activeModel?.fileName)
+        val turns = PromptBuilder.turns(c, settings, ai.modelIdentity)
         val reply = ChatMessage(role = MessageRole.ASSISTANT, text = "", kind = if (kind == MessageKind.ERROR) MessageKind.NORMAL else kind)
         c = c.copy(messages = c.messages + reply, updatedAt = System.currentTimeMillis())
         conversation = c
@@ -179,7 +179,7 @@ class ChatSession(
         items: List<QuestionSplitter.Item>, replyId: String, myToken: String,
         baseParams: GenerationParams, mode: ChatMode, subject: Subject
     ) {
-        val modelName = models.activeModel?.fileName
+        val modelName = ai.modelIdentity
         job = scope.launch {
             val sections = mutableListOf<String>()
             var failure: Throwable? = null

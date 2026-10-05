@@ -118,6 +118,10 @@ class AIController(
 
     private val enginePrefs = context.getSharedPreferences("engine", Context.MODE_PRIVATE)
 
+    /** Имя файла + описание модели из GGUF: по ним PromptBuilder понимает, что это Qwen3 с «размышлениями». */
+    val modelIdentity: String?
+        get() = loadedInfo?.let { "${it.fileName} ${it.description}" } ?: models.activeModel?.fileName
+
     /** 0 — обычный режим, 1–2 — режим совместимости (на некоторых процессорах ускоренные ядра дают мусор). */
     var compatibilityLevel by mutableStateOf(0)
         private set
@@ -134,7 +138,7 @@ class AIController(
             compatibilityLevel = level
             val verifiedKey = "verified_${model.fileName}_$level"
             if (enginePrefs.getBoolean(verifiedKey, false)) return info
-            val ok = runCatching { probe(model.fileName) }.getOrDefault(false)
+            val ok = runCatching { probe(model.fileName + " " + info.description) }.getOrDefault(false)
             if (ok || level >= 2) {
                 enginePrefs.edit().putBoolean(verifiedKey, ok).putInt(levelKey, level).apply()
                 return info
@@ -152,12 +156,13 @@ class AIController(
             ChatTurn(ChatTurn.Role.USER, "Сколько будет 2 + 2? Ответь одним числом." + if (noThink) " /no_think" else "")
         )
         val text = StringBuilder()
-        service.generate(turns, GenerationParams(maxTokens = 16, temperature = 0f)).collect { event ->
+        service.generate(turns, GenerationParams(maxTokens = 48, temperature = 0f)).collect { event ->
             if (event is AIEvent.Token) text.append(event.text)
         }
-        val answer = PromptBuilder.cleanAnswer(text.toString()).lowercase()
-        android.util.Log.i("IndexAI", "probe answer: $answer")
-        return answer.contains("4") || answer.contains("четыр")
+        // Смотрим весь текст, включая возможные «размышления» модели: важно лишь, что вычисления не сломаны.
+        val raw = text.toString().lowercase()
+        android.util.Log.i("IndexAI", "probe output: ${raw.replace("\n", " | ")}")
+        return raw.contains("4") || raw.contains("четыр") || raw.contains("four")
     }
 
     /** Сразу после загрузки обрабатываем системные правила, чтобы первый ответ начался быстрее. */
