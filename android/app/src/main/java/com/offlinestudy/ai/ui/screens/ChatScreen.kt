@@ -394,7 +394,10 @@ private fun MessageBubble(
         Spacer(Modifier.height(10.dp))
         when {
             message.kind == MessageKind.ERROR -> Text("⚠️ " + message.text, color = Palette.Orange, fontSize = 15.sp)
-            message.text.isEmpty() && isStreaming -> TypingIndicator()
+            message.text.isEmpty() && isStreaming -> {
+                val detail = com.offlinestudy.ai.LocalApp.current.ai.loadingDetail
+                if (detail != null) Text(detail, fontSize = 13.sp, color = Color.Gray) else TypingIndicator()
+            }
             else -> {
                 MarkdownText(message.text)
                 if (isStreaming) { Spacer(Modifier.height(8.dp)); TypingIndicator() }

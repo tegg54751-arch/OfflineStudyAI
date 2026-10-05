@@ -100,7 +100,7 @@ fun HomeScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(7.dp).clip(CircleShape).background(ai.state.color))
                             Spacer(Modifier.width(6.dp))
-                            Text(ai.state.title, fontSize = 13.sp, color = Color.Gray)
+                            Text(ai.loadingDetail ?: ai.state.title, fontSize = 13.sp, color = Color.Gray)
                         }
                     }
                     if (ai.state == ModelState.Loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)

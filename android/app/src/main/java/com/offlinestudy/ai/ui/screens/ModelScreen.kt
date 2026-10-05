@@ -99,7 +99,7 @@ fun ModelScreen(onBack: () -> Unit) {
                             Text("Активная модель", fontSize = 12.sp, color = Color.Gray)
                             Text(active.displayName, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                         }
-                        Text(ai.state.title, color = ai.state.color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(ai.loadingDetail ?: ai.state.title, color = ai.state.color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     InfoRow("Файл", active.fileName)
@@ -112,7 +112,7 @@ fun ModelScreen(onBack: () -> Unit) {
                         InfoRow("Контекст", "${info.contextSize} из ${info.trainContextSize}")
                         InfoRow("Загрузка заняла", String.format(Locale.US, "%.1f с", info.loadSeconds))
                     } else {
-                        InfoRow("Статус загрузки", ai.state.title)
+                        InfoRow("Статус загрузки", ai.loadingDetail ?: ai.state.title)
                     }
                     ai.lastStats?.let { InfoRow("Скорость", String.format(Locale.US, "%.1f токенов/с", it.tokensPerSecond)) }
                     InfoRow("Движок", ai.backendName)

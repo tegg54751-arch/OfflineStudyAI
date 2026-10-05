@@ -125,6 +125,8 @@ class AIController(
 
     /** 0 — обычный режим, 1–2 — режим совместимости (на некоторых процессорах ускоренные ядра дают мусор). */
     var compatibilityLevel by mutableStateOf(0)
+    /** Что происходит во время загрузки (показывается вместо «Загрузка…»). */
+    var loadingDetail by mutableStateOf<String?>(null)
         private set
 
     /**
@@ -142,17 +144,24 @@ class AIController(
     private suspend fun loadVerified(model: LocalModel): LoadedModelInfo {
         // Префикс версии движка: после смены сборки llama.cpp проверка проходит заново с уровня 0.
         val levelKey = "${ENGINE_REV}_safe_${model.fileName}"
-        var level = enginePrefs.getInt(levelKey, 0)
+        // Если телефону уже понадобился безопасный режим с другой моделью — начинаем сразу с него.
+        val deviceKey = "${ENGINE_REV}_device_level"
+        var level = maxOf(enginePrefs.getInt(levelKey, 0), enginePrefs.getInt(deviceKey, 0))
         while (true) {
-            val info = service.load(model.file, settings.contextSize, level)
+            loadingDetail = if (enginePrefs.getBoolean("${ENGINE_REV}_verified_${model.fileName}_$level", false)) null
+                else "Проверка совместимости: режим ${level + 1} из ${MAX_LEVEL + 1}…"
+            val info = try { service.load(model.file, settings.contextSize, level) } catch (e: Throwable) { loadingDetail = null; throw e }
             compatibilityLevel = level
             val verifiedKey = "${ENGINE_REV}_verified_${model.fileName}_$level"
-            if (enginePrefs.getBoolean(verifiedKey, false)) return info
+            if (enginePrefs.getBoolean(verifiedKey, false)) { loadingDetail = null; return info }
             val result = runCatching { probe(model.fileName + " " + info.description) }
             val ok = result.getOrDefault(false)
             if (result.isFailure) probeLog += "уровень $level: ошибка ${result.exceptionOrNull()?.message}"
             if (ok || level >= MAX_LEVEL) {
-                enginePrefs.edit().putBoolean(verifiedKey, ok).putInt(levelKey, level).apply()
+                val edit = enginePrefs.edit().putBoolean(verifiedKey, ok).putInt(levelKey, level)
+                if (ok && level > enginePrefs.getInt(deviceKey, 0)) edit.putInt(deviceKey, level)
+                edit.apply()
+                loadingDetail = null
                 return info
             }
             service.unload()
@@ -168,7 +177,7 @@ class AIController(
             ChatTurn(ChatTurn.Role.USER, "Сколько будет 2 + 2? Ответь одним числом." + if (noThink) " /no_think" else "")
         )
         val text = StringBuilder()
-        service.generate(turns, GenerationParams(maxTokens = 48, temperature = 0f)).collect { event ->
+        service.generate(turns, GenerationParams(maxTokens = 24, temperature = 0f)).collect { event ->
             if (event is AIEvent.Token) text.append(event.text)
         }
         // Смотрим весь текст, включая возможные «размышления» модели: важно лишь, что вычисления не сломаны.
