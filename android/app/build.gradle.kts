@@ -25,8 +25,8 @@ android {
         applicationId = "com.tegg54751.offlinestudyai"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
 
         ndk {
             // Для автотеста на эмуляторе собираем x86_64: ./gradlew assembleRelease -Pabis=x86_64

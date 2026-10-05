@@ -35,7 +35,7 @@ class AppSettings(context: Context) {
         private set
     var maxAnswerTokens by mutableStateOf(prefs.getInt("maxAnswerTokens", 900))
         private set
-    var temperature by mutableStateOf(prefs.getFloat("temperature", 0.2f))
+    var temperature by mutableStateOf(prefs.getFloat("temperature", 0.0f))
         private set
     var preloadOnLaunch by mutableStateOf(prefs.getBoolean("preloadOnLaunch", true))
         private set

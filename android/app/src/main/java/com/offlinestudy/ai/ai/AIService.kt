@@ -13,7 +13,7 @@ data class ChatTurn(val role: Role, var content: String) {
 
 data class GenerationParams(
     val maxTokens: Int = 900,
-    val temperature: Float = 0.2f,
+    val temperature: Float = 0.0f,
     val topK: Int = 40,
     val topP: Float = 0.9f,
     val minP: Float = 0.05f,
