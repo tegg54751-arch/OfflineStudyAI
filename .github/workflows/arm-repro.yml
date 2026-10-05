@@ -1,0 +1,64 @@
+# Воспроизведение «мусора при многопоточности» на настоящем ARM-сервере:
+# принудительно оставляем только вариант CPU-движка для старых ядер (ARMv8.0, как Cortex-A53/A73)
+# и сравниваем 1 и 4 потока.
+name: ARM repro
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/arm-repro.yml"]
+permissions:
+  contents: write
+jobs:
+  repro:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/cache@v4
+        id: cache-model
+        with:
+          path: model.gguf
+          key: qwen3-1.7b-q4_0-arm
+      - if: steps.cache-model.outputs.cache-hit != 'true'
+        run: curl -sSL -o model.gguf https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf
+      - name: Build
+        shell: bash
+        run: |
+          W="$GITHUB_WORKSPACE"; mkdir -p "$W/out"
+          ( sudo apt-get update -q && sudo apt-get install -y -q cmake build-essential clang
+            git clone --depth 1 --branch b11380 https://github.com/ggml-org/llama.cpp "$W/llama.cpp"
+            cd "$W/llama.cpp"
+            CC=clang CXX=clang++ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF \
+              -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_CPU_KLEIDIAI=ON -DGGML_OPENMP=OFF \
+              -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF -DLLAMA_BUILD_EXAMPLES=ON
+            cmake --build build -j 4 --target llama-completion llama-simple ) > "$W/out/build.txt" 2>&1
+          ls "$W/llama.cpp/build/bin" >> "$W/out/build.txt"
+          lscpu > "$W/out/cpu.txt"
+      - name: Run
+        shell: bash
+        run: |
+          set +e
+          W="$GITHUB_WORKSPACE"; B="$W/llama.cpp/build/bin"
+          mkdir -p "$W/variants"; mv "$B"/libggml-cpu-*.so "$W/variants/" 2>/dev/null
+          ls "$W/variants" > "$W/out/variants.txt"
+          P="<|im_start|>user
+          Сколько будет 2 + 2? Столица Франции? /no_think<|im_end|>
+          <|im_start|>assistant
+          "
+          for v in $(ls "$W/variants"); do
+            name="${v#libggml-cpu-}"; name="${name%.so}"
+            rm -f "$B"/libggml-cpu-*.so; cp "$W/variants/$v" "$B/"
+            for t in 1 4; do
+              for extra in "" "--no-repack"; do
+                tag="${name}_t${t}${extra:+_norepack}"
+                timeout 300 "$B/llama-completion" -m "$W/model.gguf" -t $t -tb $t -n 40 --temp 0 -no-cnv $extra -p "$P" > "$W/out/run_$tag.txt" 2>&1
+                echo "== $tag: $(grep -v '^llama\|^load\|^print_info\|^common\|^main\|^build\|^system\|^sampler\|^generate\|^ggml\|^\s*$' "$W/out/run_$tag.txt" | tail -c 300 | tr '\n' ' ')" >> "$W/out/summary.txt"
+              done
+            done
+          done
+          cat "$W/out/summary.txt"
+          exit 0
+      - name: Publish
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "arm-repro-${{ github.run_number }}" out/* -R "${{ github.repository }}" --title "ARM repro ${{ github.run_number }}" --notes "variants x threads" --prerelease
