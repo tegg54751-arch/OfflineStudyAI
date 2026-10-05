@@ -28,12 +28,19 @@ object PromptBuilder {
         Ответ должен быть кратким, понятным ученику и соответствовать школьной программе.
     """.trimIndent()
 
+    /**
+     * Маленькие модели (меньше ~3 млрд параметров) заметно ошибаются, если заставить их начинать
+     * с «**Ответ:** …» — им нужно сначала «проговорить» факт. Автотест: 2/7 → 5/7 правильных
+     * на тех же вопросах. Для них промпт проще. Выставляет AIController после загрузки модели.
+     */
+    @Volatile var compactPrompts = false
+
     fun systemPrompt(mode: ChatMode, subject: Subject, settings: AppSettings): String {
         val lines = mutableListOf(corePrompt, "Ученик учится в ${settings.grade.promptDescription}.")
         lines += when (settings.answerStyle) {
             AnswerStyle.ANSWER_ONLY -> "Давай только итоговый ответ, без пересказа условия и без объяснений."
-            AnswerStyle.SHORT -> "Сначала сам ответ, потом 1–3 предложения пояснения."
-            AnswerStyle.DETAILED -> "Сначала ответ, потом объяснение по шагам и пример."
+            AnswerStyle.SHORT -> if (compactPrompts) "Отвечай кратко: 1–3 предложения." else "Сначала сам ответ, потом 1–3 предложения пояснения."
+            AnswerStyle.DETAILED -> if (compactPrompts) "Объясняй по шагам." else "Сначала ответ, потом объяснение по шагам и пример."
         }
         if (subject != Subject.GENERAL) lines += "Предмет: ${subject.title}."
         lines += "Не переписывай условие задания и варианты ответа — сразу отвечай."
@@ -52,6 +59,12 @@ object PromptBuilder {
     /** Один вопрос из пачки: без истории чата, с кратким форматом. */
     fun batchTurns(item: String, mode: ChatMode, subject: Subject, settings: AppSettings, modelFileName: String?): List<ChatTurn> {
         val style = settings.answerStyle
+        if (compactPrompts && !looksLikeMultipleChoice(item) && !item.lowercase().contains("соответств") && !isFillInTheBlank(item)) {
+            var content = item
+            if (style == AnswerStyle.ANSWER_ONLY) content += "\n\n(Ответь коротко, одной строкой.)"
+            if (needsNoThink(modelFileName)) content += " /no_think"
+            return listOf(ChatTurn(ChatTurn.Role.SYSTEM, corePrompt), ChatTurn(ChatTurn.Role.USER, content))
+        }
         val system = systemPrompt(ChatMode.ASK, subject, settings) + "\nТебе дают один вопрос из списка. Ответь только на него."
         var instruction = finalInstruction(item, MessageKind.NORMAL, mode, style, null)
         instruction += if (style == AnswerStyle.ANSWER_ONLY) " Выведи только ответ одной строкой. Если не уверен — напиши «Я не уверен»."

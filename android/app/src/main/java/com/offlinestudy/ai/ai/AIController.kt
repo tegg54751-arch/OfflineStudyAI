@@ -103,6 +103,7 @@ class AIController(
         try {
             val info = loadVerified(model)
             loadedInfo = info
+            PromptBuilder.compactPrompts = info.parameterCount in 1 until 3_000_000_000L
             loadedPath = model.file.absolutePath
             loadedContext = settings.contextSize
             state = ModelState.Ready
