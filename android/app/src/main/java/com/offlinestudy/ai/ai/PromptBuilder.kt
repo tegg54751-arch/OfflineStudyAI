@@ -35,8 +35,11 @@ object PromptBuilder {
      */
     @Volatile var compactPrompts = false
 
+    /** Системный промпт для маленьких моделей: по автотесту точнее длинного (11/14 против 10/14) и короче ответы. */
+    const val compactCorePrompt = "Ты — опытный школьный учитель. Отвечай только на русском языке, точно и кратко."
+
     fun systemPrompt(mode: ChatMode, subject: Subject, settings: AppSettings): String {
-        val lines = mutableListOf(corePrompt, "Ученик учится в ${settings.grade.promptDescription}.")
+        val lines = mutableListOf(if (compactPrompts) compactCorePrompt else corePrompt, "Ученик учится в ${settings.grade.promptDescription}.")
         lines += when (settings.answerStyle) {
             AnswerStyle.ANSWER_ONLY -> "Давай только итоговый ответ, без пересказа условия и без объяснений."
             AnswerStyle.SHORT -> if (compactPrompts) "Отвечай кратко: 1–3 предложения." else "Сначала сам ответ, потом 1–3 предложения пояснения."
@@ -63,7 +66,7 @@ object PromptBuilder {
             var content = item
             if (style == AnswerStyle.ANSWER_ONLY) content += "\n\n(Ответь коротко, одной строкой.)"
             if (needsNoThink(modelFileName)) content += " /no_think"
-            return listOf(ChatTurn(ChatTurn.Role.SYSTEM, corePrompt), ChatTurn(ChatTurn.Role.USER, content))
+            return listOf(ChatTurn(ChatTurn.Role.SYSTEM, compactCorePrompt), ChatTurn(ChatTurn.Role.USER, content))
         }
         val system = systemPrompt(ChatMode.ASK, subject, settings) + "\nТебе дают один вопрос из списка. Ответь только на него."
         var instruction = finalInstruction(item, MessageKind.NORMAL, mode, style, null)

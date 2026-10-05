@@ -51,10 +51,7 @@ object SelfTest {
         val fmt = "(Формат: «**Ответ:** …», затем не больше двух коротких предложений пояснения. Если не уверен — напиши «Я не уверен».)"
         data class V(val name: String, val sys: String, val user: (String) -> String)
         val variants = listOf(
-            V("expert", "Ты — опытный школьный учитель. Отвечай только на русском языке, точно и кратко.", { "$it /no_think" }),
-            V("expert_unsure", "Ты — опытный школьный учитель. Отвечай только на русском языке, точно и кратко. Если не знаешь ответа, скажи «Я не уверен».", { "$it /no_think" }),
-            V("expert_index", "Ты — Index AI, опытный школьный учитель. Отвечай только на русском языке, точно и кратко. Не выдумывай факты.", { "$it /no_think" }),
-            V("core_plain", core, { "$it /no_think" })
+            V("expert", com.offlinestudy.ai.ai.PromptBuilder.compactCorePrompt, { "$it /no_think" })
         )
         for (v in variants) {
             var ok = 0; var tokens = 0; var secs = 0.0
