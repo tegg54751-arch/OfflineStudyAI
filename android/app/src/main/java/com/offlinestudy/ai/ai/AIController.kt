@@ -101,7 +101,7 @@ class AIController(
 
         state = ModelState.Loading
         try {
-            val info = service.load(model.file, settings.contextSize)
+            val info = loadVerified(model)
             loadedInfo = info
             loadedPath = model.file.absolutePath
             loadedContext = settings.contextSize
@@ -114,6 +114,50 @@ class AIController(
             state = ModelState.Failed(e.message ?: "Ошибка загрузки")
             throw e
         }
+    }
+
+    private val enginePrefs = context.getSharedPreferences("engine", Context.MODE_PRIVATE)
+
+    /** 0 — обычный режим, 1–2 — режим совместимости (на некоторых процессорах ускоренные ядра дают мусор). */
+    var compatibilityLevel by mutableStateOf(0)
+        private set
+
+    /**
+     * Загружает модель и один раз проверяет, что она отвечает осмысленно («2 + 2» → «4»).
+     * Если ответ — мусор, перезагружает в более безопасном режиме и запоминает его для этого телефона.
+     */
+    private suspend fun loadVerified(model: LocalModel): LoadedModelInfo {
+        val levelKey = "safe_${model.fileName}"
+        var level = enginePrefs.getInt(levelKey, 0)
+        while (true) {
+            val info = service.load(model.file, settings.contextSize, level)
+            compatibilityLevel = level
+            val verifiedKey = "verified_${model.fileName}_$level"
+            if (enginePrefs.getBoolean(verifiedKey, false)) return info
+            val ok = runCatching { probe(model.fileName) }.getOrDefault(false)
+            if (ok || level >= 2) {
+                enginePrefs.edit().putBoolean(verifiedKey, ok).putInt(levelKey, level).apply()
+                return info
+            }
+            service.unload()
+            level++
+            enginePrefs.edit().putInt(levelKey, level).apply()
+        }
+    }
+
+    private suspend fun probe(fileName: String): Boolean {
+        val noThink = fileName.lowercase().let { it.contains("qwen3") && !it.contains("2507") && !it.contains("instruct") }
+        val turns = listOf(
+            ChatTurn(ChatTurn.Role.SYSTEM, "Отвечай очень коротко."),
+            ChatTurn(ChatTurn.Role.USER, "Сколько будет 2 + 2? Ответь одним числом." + if (noThink) " /no_think" else "")
+        )
+        val text = StringBuilder()
+        service.generate(turns, GenerationParams(maxTokens = 16, temperature = 0f)).collect { event ->
+            if (event is AIEvent.Token) text.append(event.text)
+        }
+        val answer = PromptBuilder.cleanAnswer(text.toString()).lowercase()
+        android.util.Log.i("IndexAI", "probe answer: $answer")
+        return answer.contains("4") || answer.contains("четыр")
     }
 
     /** Сразу после загрузки обрабатываем системные правила, чтобы первый ответ начался быстрее. */

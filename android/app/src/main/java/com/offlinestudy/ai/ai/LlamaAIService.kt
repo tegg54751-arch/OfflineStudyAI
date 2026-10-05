@@ -35,10 +35,10 @@ class LlamaAIService(nativeLibDir: String) : AIService {
         LlamaBridge.nativeInit(nativeLibDir)
     }
 
-    override suspend fun load(model: File, contextSize: Int): LoadedModelInfo = withContext(dispatcher) {
+    override suspend fun load(model: File, contextSize: Int, safeLevel: Int): LoadedModelInfo = withContext(dispatcher) {
         freeLocked()
         val started = System.nanoTime()
-        val h = LlamaBridge.nativeLoad(model.absolutePath, contextSize, DeviceInfo.recommendedThreads())
+        val h = LlamaBridge.nativeLoad(model.absolutePath, contextSize, DeviceInfo.recommendedThreads(), safeLevel)
         if (h == 0L) {
             throw when (LlamaBridge.nativeLastError()) {
                 "context_init_failed" -> AIException.contextFailed()

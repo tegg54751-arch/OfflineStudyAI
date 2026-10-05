@@ -70,7 +70,8 @@ class AIException(message: String) : Exception(message) {
 
 interface AIService {
     val backendName: String
-    suspend fun load(model: File, contextSize: Int): LoadedModelInfo
+    /** safeLevel: 0 — обычный режим, 1–2 — режимы совместимости для проблемных процессоров. */
+    suspend fun load(model: File, contextSize: Int, safeLevel: Int = 0): LoadedModelInfo
     suspend fun unload()
     fun generate(turns: List<ChatTurn>, params: GenerationParams): Flow<AIEvent>
 }

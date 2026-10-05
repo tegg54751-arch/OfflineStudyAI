@@ -94,7 +94,8 @@ class ChatSession(
     fun giveExample() = submit("Дай конкретный пример по этой теме — из жизни или задачу с решением.", MessageKind.EXAMPLE)
     fun answerOnly() = submit("Напиши только ответ, без условия и объяснений.", MessageKind.ANSWER_ONLY)
 
-    fun stop() { job?.cancel() }
+    /** «Стоп» срабатывает сразу: ответ фиксируется, а вычисление прерывается в фоне. */
+    fun stop() = finalizeIfNeeded()
 
     fun toggleFavorite(messageId: String) {
         conversation = conversation.copy(messages = conversation.messages.map {

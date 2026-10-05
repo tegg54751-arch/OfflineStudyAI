@@ -300,14 +300,19 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLastError(JNIEnv *env, jobject) {
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring jpath, jint n_ctx_requested, jint n_threads) {
+Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring jpath, jint n_ctx_requested, jint n_threads, jint safe_level) {
     g_last_error.clear();
     const std::string path = jstring_to_std(env, jpath);
 
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0; // на Android считаем на CPU — стабильно на любых телефонах
+    // Безопасный режим (если на телефоне получились «мусорные» ответы):
+    // 1+ — без перепаковки весов под ускоренные ядра (KleidiAI/ARM repack) и без flash attention,
+    // 2  — ещё и в один поток.
+    if (safe_level >= 1) mparams.use_extra_bufts = false;
+    if (safe_level >= 2) n_threads = 1;
 
-    add_log("Load: " + path + " ctx=" + std::to_string(n_ctx_requested) + " threads=" + std::to_string(n_threads));
+    add_log("Load: " + path + " ctx=" + std::to_string(n_ctx_requested) + " threads=" + std::to_string(n_threads) + " safe=" + std::to_string(safe_level));
     if (ggml_backend_reg_count() == 0) {
         g_last_error = "no_backends";
         add_log("E Load: no ggml backends were loaded");
@@ -332,9 +337,18 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     cparams.n_ubatch = 256;
     cparams.n_threads = std::max(1, static_cast<int>(n_threads));
     cparams.n_threads_batch = cparams.n_threads;
+    cparams.flash_attn_type = safe_level >= 1 ? LLAMA_FLASH_ATTN_TYPE_DISABLED : LLAMA_FLASH_ATTN_TYPE_AUTO;
+
+    // Engine создаём заранее: он нужен для мгновенной отмены вычислений (abort_callback).
+    auto *engine = new Engine();
+    cparams.abort_callback = [](void *data) -> bool {
+        return static_cast<Engine *>(data)->cancel.load();
+    };
+    cparams.abort_callback_data = engine;
 
     llama_context *ctx = llama_init_from_model(model, cparams);
     if (!ctx) {
+        delete engine;
         llama_model_free(model);
         g_last_error = "context_init_failed";
         add_log("E Load: llama_init_from_model returned null");
@@ -342,7 +356,6 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     }
     add_log("Load: OK, n_ctx=" + std::to_string(llama_n_ctx(ctx)));
 
-    auto *engine = new Engine();
     engine->model = model;
     engine->ctx = ctx;
     engine->vocab = llama_model_get_vocab(model);
@@ -489,6 +502,7 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
         const int rc = llama_decode(ctx, batch);
         if (rc != 0) {
             reset_cache(*engine);
+            if (rc == 2 || engine->cancel) return env->NewStringUTF("ERR:cancelled");
             return env->NewStringUTF(rc == 1 ? "ERR:prompt_too_long" : ("ERR:decode_" + std::to_string(rc)).c_str());
         }
         engine->cached.insert(engine->cached.end(), prompt.begin() + static_cast<long>(position), prompt.begin() + static_cast<long>(end));
@@ -532,6 +546,8 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
     int generated = 0;
     bool stopped_by_limit = false;
     bool cancelled = false;
+    bool stopped_by_loop = false;
+    std::vector<llama_token> recent;
     std::string pending;
     int n_pos = static_cast<int>(prompt.size());
 
@@ -541,6 +557,19 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
 
         const llama_token token = llama_sampler_sample(sampler, ctx, -1);
         if (llama_vocab_is_eog(vocab, token)) break;
+
+        // Защита от зацикливания: один и тот же кусок повторяется 6 раз подряд — останавливаемся.
+        recent.push_back(token);
+        bool looping = false;
+        for (size_t period = 1; period <= 12 && !looping; ++period) {
+            const size_t need = period * 6;
+            if (recent.size() < need) break;
+            looping = true;
+            for (size_t k = 0; k < need - period; ++k) {
+                if (recent[recent.size() - need + k] != recent[recent.size() - need + k + period]) { looping = false; break; }
+            }
+        }
+        if (looping) { add_log("W Generate: repetition loop detected, stopping"); stopped_by_loop = true; break; }
 
         pending += token_piece(vocab, token, true); // <think> и т.п. видны — PromptBuilder.cleanAnswer их уберёт
         const size_t ready = valid_utf8_prefix(pending);
@@ -554,6 +583,7 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
         const int rc = llama_decode(ctx, batch);
         if (rc != 0) {
             reset_cache(*engine);
+            if (rc == 2 || engine->cancel) { cancelled = true; break; }
             return env->NewStringUTF(("ERR:decode_" + std::to_string(rc)).c_str());
         }
         engine->cached.push_back(token);
@@ -576,7 +606,8 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
     stats += "\"promptSeconds\":" + std::to_string(prompt_seconds) + ",";
     stats += "\"generationSeconds\":" + std::to_string(gen_seconds) + ",";
     stats += std::string("\"stoppedByLimit\":") + (stopped_by_limit ? "true" : "false") + ",";
-    stats += std::string("\"cancelled\":") + (cancelled ? "true" : "false");
+    stats += std::string("\"cancelled\":") + (cancelled ? "true" : "false") + ",";
+    stats += std::string("\"looped\":") + (stopped_by_loop ? "true" : "false");
     stats += "}";
     return env->NewStringUTF(stats.c_str());
 }

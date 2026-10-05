@@ -41,7 +41,7 @@ object SelfTest {
                 log("models=${app.models.models.map { it.fileName + ":" + it.sizeBytes }}")
                 val t0 = System.currentTimeMillis()
                 val info = runCatching { app.ai.ensureLoaded() }
-                log("load ok=${info.isSuccess} ms=${System.currentTimeMillis() - t0} err=${info.exceptionOrNull()?.message} info=${info.getOrNull()}")
+                log("load ok=${info.isSuccess} compat=${app.ai.compatibilityLevel} ms=${System.currentTimeMillis() - t0} err=${info.exceptionOrNull()?.message} info=${info.getOrNull()}")
                 if (info.isSuccess) {
                     app.router.tab = AppTab.CHAT
                     delay(3000) // даём прогреву закончиться

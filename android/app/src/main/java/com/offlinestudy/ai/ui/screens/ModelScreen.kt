@@ -116,6 +116,7 @@ fun ModelScreen(onBack: () -> Unit) {
                     }
                     ai.lastStats?.let { InfoRow("Скорость", String.format(Locale.US, "%.1f токенов/с", it.tokensPerSecond)) }
                     InfoRow("Движок", ai.backendName)
+                    if (ai.compatibilityLevel > 0) InfoRow("Режим совместимости", "уровень ${ai.compatibilityLevel}")
                     (ai.state as? ModelState.Failed)?.let { Text(it.message, color = Palette.Red, fontSize = 13.sp) }
                     Spacer(Modifier.height(8.dp))
                     if (ai.loadedInfo == null) {
