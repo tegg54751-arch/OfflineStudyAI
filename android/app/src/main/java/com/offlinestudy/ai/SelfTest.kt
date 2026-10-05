@@ -28,6 +28,55 @@ object SelfTest {
         "1. Столица Франции?\n2. Сколько будет 12 * 12?\n3. Кто написал «Евгений Онегин»?"
     )
 
+    /** Сравнение формулировок промпта на одних и тех же фактических вопросах (жадное декодирование). */
+    private suspend fun experiments(app: OfflineStudyApp, log: (String) -> Unit) {
+        val facts = listOf(
+            "Столица Франции?" to "париж",
+            "Кто написал «Евгений Онегин»?" to "пушкин",
+            "Сколько будет 12 * 12?" to "144",
+            "Какой газ растения поглощают при фотосинтезе?" to "углекисл",
+            "Самая длинная река в России?" to "",
+            "В каком году отменили крепостное право в России?" to "1861",
+            "Какой орган перекачивает кровь?" to "сердц",
+            "Чему равна сумма углов треугольника?" to "180"
+        )
+        val core = com.offlinestudy.ai.ai.PromptBuilder.corePrompt
+        val fmt = "(Формат: «**Ответ:** …», затем не больше двух коротких предложений пояснения. Если не уверен — напиши «Я не уверен».)"
+        data class V(val name: String, val sys: String, val user: (String) -> String)
+        val variants = listOf(
+            V("current", core + "\nТебе дают один вопрос из списка. Ответь только на него.", { "$it\n\n$fmt /no_think" }),
+            V("core_plain", core, { "$it /no_think" }),
+            V("core_fmt", core, { "$it\n\n$fmt /no_think" }),
+            V("short_sys", "Ты — школьный помощник. Отвечай кратко и только на русском языке.", { "$it /no_think" }),
+            V("vopros", core, { "Вопрос: $it\nДай правильный ответ. /no_think" }),
+            V("think", core, { it })
+        )
+        for (v in variants) {
+            var ok = 0; var tokens = 0; var secs = 0.0
+            for ((q, key) in facts) {
+                val turns = listOf(
+                    com.offlinestudy.ai.ai.ChatTurn(com.offlinestudy.ai.ai.ChatTurn.Role.SYSTEM, v.sys),
+                    com.offlinestudy.ai.ai.ChatTurn(com.offlinestudy.ai.ai.ChatTurn.Role.USER, v.user(q))
+                )
+                val sb = StringBuilder()
+                runCatching {
+                    app.ai.generate(turns, com.offlinestudy.ai.ai.GenerationParams(maxTokens = if (v.name == "think") 600 else 160, temperature = 0f, discourageLatin = true))
+                        .collect { e ->
+                            when (e) {
+                                is com.offlinestudy.ai.ai.AIEvent.Token -> sb.append(e.text)
+                                is com.offlinestudy.ai.ai.AIEvent.Finished -> { tokens += e.stats.generatedTokens; secs += e.stats.generationSeconds }
+                            }
+                        }
+                }
+                val a = com.offlinestudy.ai.ai.PromptBuilder.cleanAnswer(sb.toString())
+                val good = key.isNotEmpty() && a.lowercase().contains(key)
+                if (good) ok++
+                log("EXP ${v.name} | $q -> ${a.replace("\n", " | ").take(200)}")
+            }
+            log("EXPSUM ${v.name}: $ok/${facts.count { it.second.isNotEmpty() }} tokens=$tokens sec=${"%.1f".format(secs)}")
+        }
+    }
+
     fun run(app: OfflineStudyApp) {
         app.appScope.launch {
             val dir = app.getExternalFilesDir(null) ?: app.filesDir
@@ -62,6 +111,7 @@ object SelfTest {
                             "ms" to JsonPrimitive(ms), "tokensPerSecond" to JsonPrimitive(tps)
                         ))
                     }
+                    experiments(app, ::log)
                 }
                 val report = JsonObject(mapOf(
                     "device" to JsonPrimitive("${Build.MANUFACTURER} ${Build.MODEL}"),

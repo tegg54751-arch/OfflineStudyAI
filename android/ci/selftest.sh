@@ -22,7 +22,7 @@ adb push model.gguf $EXT/model.gguf
 adb shell ls -l $EXT
 
 adb shell am start -W -n $PKG/$ACT --ez selftest true
-for i in $(seq 1 180); do
+for i in $(seq 1 300); do
   sleep 10
   if [ $((i % 6)) -eq 0 ]; then adb exec-out screencap -p > $OUT/shot_$(printf %03d $i).png; fi
   if adb shell "[ -f $EXT/selftest_done ] && echo yes" | grep -q yes; then echo "selftest done after $((i*10))s"; break; fi
