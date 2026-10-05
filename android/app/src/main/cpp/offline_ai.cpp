@@ -224,17 +224,20 @@ void build_filters(Engine &engine) {
             engine.banned.push_back({token, -INFINITY});
             continue;
         }
-        size_t start = 0;
-        while (start < piece.size() && piece[start] == ' ') ++start;
-        const size_t letters = piece.size() - start;
-        if (letters >= 2) {
-            bool all_latin = true;
-            for (size_t k = start; k < piece.size(); ++k) {
-                const unsigned char c = static_cast<unsigned char>(piece[k]);
-                if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) { all_latin = false; break; }
-            }
-            if (all_latin) engine.latin.push_back({token, -6.0f});
+        // Для предметов на русском запрещаем любые токены с латинскими буквами:
+        // мягкий штраф пропускал «Фотоcynthesis», «planti», «glucose».
+        // Исключение — римские цифры (XIX век, Пётр I).
+        // Служебные теги вроде <think> не трогаем.
+        if (llama_vocab_get_attr(engine.vocab, token) & LLAMA_TOKEN_ATTR_USER_DEFINED) continue;
+        if (piece.size() >= 3 && piece.front() == '<' && piece.back() == '>') continue;
+        bool has_latin = false, only_roman = true;
+        for (unsigned char c : piece) {
+            const bool latin = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            if (!latin) continue;
+            has_latin = true;
+            if (c != 'I' && c != 'V' && c != 'X' && c != 'L' && c != 'C' && c != 'M') only_roman = false;
         }
+        if (has_latin && !only_roman) engine.latin.push_back({token, -INFINITY});
     }
 }
 
