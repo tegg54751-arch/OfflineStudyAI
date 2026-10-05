@@ -146,7 +146,10 @@ fun ModelScreen(onBack: () -> Unit) {
             var showLog by remember { mutableStateOf(false) }
             GlassButton(if (showLog) "Скрыть журнал движка" else "Журнал движка (для диагностики)", Modifier.fillMaxWidth(), leading = "🧾") { showLog = !showLog }
             if (showLog) {
-                val log = remember(tick) { com.offlinestudy.ai.ai.LlamaBridge.nativeGetLog().ifBlank { "Журнал пуст." } }
+                val log = remember(tick) {
+                    val probes = ai.probeLog.toList().joinToString("\n")
+                    ((if (probes.isNotEmpty()) "Проверка при загрузке:\n$probes\n\n" else "") + com.offlinestudy.ai.ai.LlamaBridge.nativeGetLog()).ifBlank { "Журнал пуст." }
+                }
                 val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
                 GlassCard {
                     Text("Нажмите, чтобы скопировать", fontSize = 12.sp, color = Palette.Indigo,

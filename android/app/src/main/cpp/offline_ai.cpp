@@ -313,7 +313,8 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     // 1+ — без перепаковки весов под ускоренные ядра (KleidiAI/ARM repack) и без flash attention,
     // 2  — ещё и в один поток.
     if (safe_level >= 1) mparams.use_extra_bufts = false;
-    if (safe_level >= 2) n_threads = 1;
+    if (safe_level == 2 && n_threads > 2) n_threads = 2;
+    if (safe_level >= 3) n_threads = 1;
 
     add_log("Load: " + path + " ctx=" + std::to_string(n_ctx_requested) + " threads=" + std::to_string(n_threads) + " safe=" + std::to_string(safe_level));
     if (ggml_backend_reg_count() == 0) {

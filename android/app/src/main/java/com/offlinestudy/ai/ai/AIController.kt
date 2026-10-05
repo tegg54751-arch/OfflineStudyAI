@@ -131,16 +131,27 @@ class AIController(
      * Загружает модель и один раз проверяет, что она отвечает осмысленно («2 + 2» → «4»).
      * Если ответ — мусор, перезагружает в более безопасном режиме и запоминает его для этого телефона.
      */
+    /** Что ответила модель на проверке при загрузке — показывается в «Журнале движка». */
+    val probeLog = java.util.Collections.synchronizedList(mutableListOf<String>())
+
+    private companion object {
+        const val ENGINE_REV = "e2"
+        const val MAX_LEVEL = 3
+    }
+
     private suspend fun loadVerified(model: LocalModel): LoadedModelInfo {
-        val levelKey = "safe_${model.fileName}"
+        // Префикс версии движка: после смены сборки llama.cpp проверка проходит заново с уровня 0.
+        val levelKey = "${ENGINE_REV}_safe_${model.fileName}"
         var level = enginePrefs.getInt(levelKey, 0)
         while (true) {
             val info = service.load(model.file, settings.contextSize, level)
             compatibilityLevel = level
-            val verifiedKey = "verified_${model.fileName}_$level"
+            val verifiedKey = "${ENGINE_REV}_verified_${model.fileName}_$level"
             if (enginePrefs.getBoolean(verifiedKey, false)) return info
-            val ok = runCatching { probe(model.fileName + " " + info.description) }.getOrDefault(false)
-            if (ok || level >= 2) {
+            val result = runCatching { probe(model.fileName + " " + info.description) }
+            val ok = result.getOrDefault(false)
+            if (result.isFailure) probeLog += "уровень $level: ошибка ${result.exceptionOrNull()?.message}"
+            if (ok || level >= MAX_LEVEL) {
                 enginePrefs.edit().putBoolean(verifiedKey, ok).putInt(levelKey, level).apply()
                 return info
             }
@@ -163,6 +174,7 @@ class AIController(
         // Смотрим весь текст, включая возможные «размышления» модели: важно лишь, что вычисления не сломаны.
         val raw = text.toString().lowercase()
         android.util.Log.i("IndexAI", "probe output: ${raw.replace("\n", " | ")}")
+        probeLog += "уровень $compatibilityLevel, проверка 2+2: ${raw.replace("\n", " ").take(120)}"
         return raw.contains("4") || raw.contains("четыр") || raw.contains("four")
     }
 
