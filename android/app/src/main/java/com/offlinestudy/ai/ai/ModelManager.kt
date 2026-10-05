@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.offlinestudy.ai.util.DeviceInfo
 import com.offlinestudy.ai.util.Format
+import com.offlinestudy.ai.util.GgufName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -58,6 +59,17 @@ class ModelManager(private val context: Context) {
                 }
             }
         }
+        // Файлы с «хэш-именем» (так их сохраняет браузер при скачивании с Hugging Face)
+        // переименовываем по названию модели из самого файла.
+        modelsDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.extension.equals("gguf", true) && GgufName.looksUnhelpful(file.name)) {
+                val nice = GgufName.suggestedFileName(file) ?: return@forEach
+                val target = File(modelsDir, nice)
+                if (!target.exists() && file.renameTo(target)) {
+                    if (activeModelId == file.name) select(LocalModel(target))
+                }
+            }
+        }
         models = (modelsDir.listFiles()?.toList() ?: emptyList())
             .filter { it.isFile && it.extension.equals("gguf", true) && isGguf(it) }
             .sortedByDescending { it.lastModified() }
@@ -95,6 +107,9 @@ class ModelManager(private val context: Context) {
                 cursor.getString(0)?.let { name = it }
                 size = cursor.getLong(1)
             }
+        }
+        if (GgufName.looksUnhelpful(name)) {
+            runCatching { resolver.openInputStream(uri)?.use { GgufName.suggestedFileName(it) } }.getOrNull()?.let { name = it }
         }
         if (!name.lowercase().endsWith(".gguf")) name += ".gguf"
 
