@@ -6,6 +6,9 @@
 #include <jni.h>
 #include <android/log.h>
 #include <unistd.h>
+#include <sched.h>
+#include <fstream>
+#include <sstream>
 
 #include <atomic>
 #include <deque>
@@ -34,6 +37,7 @@ struct Engine {
     std::vector<llama_logit_bias> latin;
     std::atomic<bool> cancel{false};
     std::mutex mutex;
+    bool pin_big = false; // считать только на быстрых ядрах
 };
 
 std::string g_last_error;
@@ -44,6 +48,60 @@ std::once_flag g_backend_once;
 std::mutex g_log_mutex;
 std::deque<std::string> g_log;
 std::string g_log_partial;
+// Заголовок журнала (процессор, бэкенды) — не вытесняется новыми строками.
+std::vector<std::string> g_header;
+
+// Маски ядер: все и только быстрые (частота не ниже 75% от максимальной).
+cpu_set_t g_all_mask;
+cpu_set_t g_big_mask;
+int g_big_count = 0;
+
+void add_log(const std::string &line);
+
+std::string read_file(const std::string &path) {
+    std::ifstream f(path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
+
+void detect_cpus() {
+    CPU_ZERO(&g_all_mask);
+    CPU_ZERO(&g_big_mask);
+    const int n = static_cast<int>(sysconf(_SC_NPROCESSORS_CONF));
+    std::vector<long> freq(std::max(n, 0), 0);
+    long max_freq = 0;
+    std::string freqs;
+    for (int i = 0; i < n; ++i) {
+        CPU_SET(i, &g_all_mask);
+        const std::string v = read_file("/sys/devices/system/cpu/cpu" + std::to_string(i) + "/cpufreq/cpuinfo_max_freq");
+        freq[i] = v.empty() ? 0 : std::atol(v.c_str());
+        max_freq = std::max(max_freq, freq[i]);
+        freqs += (i ? " " : "") + std::to_string(freq[i] / 1000);
+    }
+    for (int i = 0; i < n; ++i) {
+        if (max_freq == 0 || freq[i] * 4 >= max_freq * 3) { CPU_SET(i, &g_big_mask); ++g_big_count; }
+    }
+    g_header.push_back("CPU: " + std::to_string(n) + " cores, max MHz = " + freqs + ", fast cores = " + std::to_string(g_big_count));
+    // Модели ядер и набор инструкций — из /proc/cpuinfo.
+    std::istringstream info(read_file("/proc/cpuinfo"));
+    std::string line, parts, features, hardware;
+    while (std::getline(info, line)) {
+        if (line.rfind("CPU part", 0) == 0) { const auto p = line.find(':'); if (p != std::string::npos) parts += line.substr(p + 1); }
+        else if (features.empty() && line.rfind("Features", 0) == 0) features = line;
+        else if (line.rfind("Hardware", 0) == 0) hardware = line;
+    }
+    g_header.push_back("CPU parts:" + parts);
+    if (!features.empty()) g_header.push_back("CPU " + features);
+    if (!hardware.empty()) g_header.push_back("CPU " + hardware);
+}
+
+void apply_affinity(bool pin_big) {
+    cpu_set_t &mask = (pin_big && g_big_count > 0) ? g_big_mask : g_all_mask;
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) != 0) {
+        add_log(std::string("W affinity: sched_setaffinity failed: ") + strerror(errno));
+    }
+}
 
 void add_log(const std::string &line) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
@@ -273,9 +331,15 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeInit(JNIEnv *env, jobject, jstring
         add_log("Init: backends dir = " + dir);
         ggml_backend_load_all_from_path(dir.c_str());
         llama_backend_init();
-        add_log(std::string("Init: system info = ") + llama_print_system_info());
+        detect_cpus();
+        g_header.push_back(std::string("System info: ") + llama_print_system_info());
         for (size_t i = 0; i < ggml_backend_reg_count(); ++i) {
-            add_log(std::string("Init: backend ") + ggml_backend_reg_name(ggml_backend_reg_get(i)));
+            g_header.push_back(std::string("Backend: ") + ggml_backend_reg_name(ggml_backend_reg_get(i)));
+        }
+        {
+            // Какой вариант CPU-бэкенда выбран (строки load_backend из журнала).
+            std::lock_guard<std::mutex> lock(g_log_mutex);
+            for (const auto &l : g_log) if (l.find("load_backend") != std::string::npos) g_header.push_back(l);
         }
     });
 }
@@ -290,6 +354,8 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGetLog(JNIEnv *env, jobject) {
     std::string all;
     {
         std::lock_guard<std::mutex> lock(g_log_mutex);
+        for (const auto &line : g_header) { all += line; all += '\n'; }
+        all += "----\n";
         for (const auto &line : g_log) { all += line; all += '\n'; }
     }
     // NewStringUTF требует корректный (modified) UTF-8: заменяем нулевые байты на всякий случай.
@@ -309,12 +375,14 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
 
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0; // на Android считаем на CPU — стабильно на любых телефонах
-    // Безопасный режим (если на телефоне получились «мусорные» ответы):
-    // 1+ — без перепаковки весов под ускоренные ядра (KleidiAI/ARM repack) и без flash attention,
-    // 2  — ещё и в один поток.
-    if (safe_level >= 1) mparams.use_extra_bufts = false;
-    if (safe_level == 2 && n_threads > 2) n_threads = 2;
-    if (safe_level >= 3) n_threads = 1;
+    // Уровни совместимости (подбираются автоматически проверкой при загрузке):
+    // 0 — обычный режим; 1 — только быстрые ядра; 2 — быстрые ядра без перепаковки весов и flash attention;
+    // 3 — то же в 2 потока; 4 — один поток.
+    const bool pin_big = safe_level >= 1 && safe_level <= 3 && g_big_count > 0;
+    if (safe_level >= 2) mparams.use_extra_bufts = false;
+    if (pin_big) n_threads = std::min(static_cast<int>(n_threads), g_big_count);
+    if (safe_level == 3 && n_threads > 2) n_threads = 2;
+    if (safe_level >= 4) n_threads = 1;
 
     add_log("Load: " + path + " ctx=" + std::to_string(n_ctx_requested) + " threads=" + std::to_string(n_threads) + " safe=" + std::to_string(safe_level));
     if (ggml_backend_reg_count() == 0) {
@@ -341,7 +409,7 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
     cparams.n_ubatch = 256;
     cparams.n_threads = std::max(1, static_cast<int>(n_threads));
     cparams.n_threads_batch = cparams.n_threads;
-    cparams.flash_attn_type = safe_level >= 1 ? LLAMA_FLASH_ATTN_TYPE_DISABLED : LLAMA_FLASH_ATTN_TYPE_AUTO;
+    cparams.flash_attn_type = safe_level >= 2 ? LLAMA_FLASH_ATTN_TYPE_DISABLED : LLAMA_FLASH_ATTN_TYPE_AUTO;
 
     // Engine создаём заранее: он нужен для мгновенной отмены вычислений (abort_callback).
     auto *engine = new Engine();
@@ -358,7 +426,8 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring
         add_log("E Load: llama_init_from_model returned null");
         return 0;
     }
-    add_log("Load: OK, n_ctx=" + std::to_string(llama_n_ctx(ctx)));
+    add_log("Load: OK, n_ctx=" + std::to_string(llama_n_ctx(ctx)) + (pin_big ? " (fast cores only)" : ""));
+    engine->pin_big = pin_big;
 
     engine->model = model;
     engine->ctx = ctx;
@@ -426,6 +495,7 @@ Java_com_offlinestudy_ai_ai_LlamaBridge_nativeGenerate(
     if (!engine || !engine->ctx) return env->NewStringUTF("ERR:model_not_loaded");
     std::lock_guard<std::mutex> lock(engine->mutex);
     engine->cancel = false;
+    apply_affinity(engine->pin_big);
 
     jclass cb_class = env->GetObjectClass(callback);
     jmethodID on_bytes = env->GetMethodID(cb_class, "onBytes", "([B)V");

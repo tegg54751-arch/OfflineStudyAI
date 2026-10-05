@@ -135,8 +135,8 @@ class AIController(
     val probeLog = java.util.Collections.synchronizedList(mutableListOf<String>())
 
     private companion object {
-        const val ENGINE_REV = "e2"
-        const val MAX_LEVEL = 3
+        const val ENGINE_REV = "e3"
+        const val MAX_LEVEL = 4
     }
 
     private suspend fun loadVerified(model: LocalModel): LoadedModelInfo {
