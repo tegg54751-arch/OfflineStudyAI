@@ -16,7 +16,7 @@ sleep 8
 adb exec-out screencap -p > $OUT/01_first_launch.png
 # Прокручиваем главный экран вниз — проверить нижние плашки
 WH=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); W=${WH%x*}; H=${WH#*x}
-adb shell input swipe $((W/2)) $((H*3/4)) $((W/2)) $((H/5)) 600; sleep 2
+for k in 1 2 3 4 5; do adb shell input swipe $((W/2)) $((H*3/4)) $((W/2)) $((H/5)) 400; sleep 1; done; sleep 1
 adb exec-out screencap -p > $OUT/02_home_scrolled.png
 adb shell am force-stop $PKG
 
