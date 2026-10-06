@@ -14,6 +14,9 @@ adb logcat -c
 adb shell am start -W -n $PKG/$ACT
 sleep 8
 adb exec-out screencap -p > $OUT/01_first_launch.png
+# Прокручиваем главный экран вниз — проверить нижние плашки
+adb shell input swipe 540 1600 540 500 400; sleep 2
+adb exec-out screencap -p > $OUT/02_home_scrolled.png
 adb shell am force-stop $PKG
 
 adb shell mkdir -p $EXT
