@@ -8,6 +8,7 @@ struct HomeView: View {
     @Environment(HistoryStore.self) private var history
     @Environment(AppRouter.self) private var router
 
+    @Environment(\.openURL) private var openURL
     @State private var appeared = false
 
     var body: some View {
@@ -22,6 +23,8 @@ struct HomeView: View {
                             .modifier(AppearEffect(appeared: appeared, delay: 0.05))
                         universalCard
                             .modifier(AppearEffect(appeared: appeared, delay: 0.1))
+                        telegramBanner
+                            .modifier(AppearEffect(appeared: appeared, delay: 0.12))
                         if !history.conversations.isEmpty {
                             recentSection
                                 .modifier(AppearEffect(appeared: appeared, delay: 0.15))
@@ -149,6 +152,59 @@ struct HomeView: View {
             }
         }
         .glassCard(cornerRadius: 30, padding: 20)
+    }
+
+    // MARK: - Telegram-канал
+
+    private static let telegramURL = URL(string: "https://t.me/IndexAIChannel")!
+
+    private var telegramBanner: some View {
+        Button {
+            openURL(Self.telegramURL)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.13, green: 0.62, blue: 0.85))
+                    .rotationEffect(.degrees(-12))
+                    .offset(x: -1, y: 1)
+                    .frame(width: 48, height: 48)
+                    .background(.white, in: Circle())
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Наш Telegram-канал")
+                        .font(.headline)
+                    Text("Новости, обновления и новые модели")
+                        .font(.footnote)
+                        .opacity(0.85)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.right")
+                    .font(.footnote.weight(.bold))
+                    .frame(width: 30, height: 30)
+                    .background(.white.opacity(0.22), in: Circle())
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+            .background {
+                ZStack(alignment: .trailing) {
+                    LinearGradient(
+                        colors: [Color(red: 0.16, green: 0.67, blue: 0.93), Color(red: 0.12, green: 0.53, blue: 0.82)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 92))
+                        .foregroundStyle(.white.opacity(0.10))
+                        .rotationEffect(.degrees(-12))
+                        .offset(x: 18, y: 10)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.18)))
+            .shadow(color: Color(red: 0.13, green: 0.62, blue: 0.85).opacity(0.35), radius: 14, y: 6)
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("Открыть Telegram-канал Index AI")
     }
 
     // MARK: - Недавние

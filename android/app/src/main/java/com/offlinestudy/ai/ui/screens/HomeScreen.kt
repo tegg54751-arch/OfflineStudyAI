@@ -1,6 +1,20 @@
 package com.offlinestudy.ai.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,6 +153,8 @@ fun HomeScreen() {
                 }
             }
 
+            TelegramBanner()
+
             // Недавние
             val recent = app.history.conversations.take(3)
             if (recent.isNotEmpty()) {
@@ -164,6 +180,64 @@ fun HomeScreen() {
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+private const val TELEGRAM_URL = "https://t.me/IndexAIChannel"
+
+/** Плашка Telegram-канала: открывает канал в Telegram (или в браузере, если Telegram не установлен). */
+@Composable
+private fun TelegramBanner() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "tgScale")
+    val tgDark = Color(0xFF1E88D1)
+    val tgLight = Color(0xFF2AABEE)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(14.dp, RoundedCornerShape(24.dp), ambientColor = tgLight, spotColor = tgLight)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(tgLight, tgDark)))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
+            .clickable(interactionSource = interaction, indication = null) {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(TELEGRAM_URL))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+    ) {
+        // Большой полупрозрачный самолётик на фоне
+        Icon(
+            Icons.AutoMirrored.Filled.Send, contentDescription = null,
+            tint = Color.White.copy(alpha = 0.10f),
+            modifier = Modifier.align(Alignment.CenterEnd).offset(x = 18.dp, y = 10.dp).size(96.dp).rotate(-25f)
+        )
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(48.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = tgDark,
+                    modifier = Modifier.size(24.dp).offset(x = 1.dp, y = (-1).dp).rotate(-25f)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Наш Telegram-канал", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("Новости, обновления и новые модели", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center
+            ) { Text("↗", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         }
     }
 }
